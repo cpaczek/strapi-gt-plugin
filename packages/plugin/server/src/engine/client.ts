@@ -19,6 +19,7 @@ import { z } from 'zod';
 import {
   GT_API_VERSION,
   MAX_SOURCE_BYTES,
+  MILLISECONDS_PER_SECOND,
   REQUEST_TIMEOUT_MS,
   RUNTIME_BATCH_BYTES,
   RUNTIME_BATCH_ENTRIES,
@@ -101,7 +102,9 @@ const sameReference = (actual: GtFileReference, expected: GtFileReference): bool
   actual.branchId === expected.branchId;
 const httpFailure = (status: number, retryAfter?: string | null): GtRequestError => {
   const seconds =
-    retryAfter && /^\d+(?:\.\d+)?$/.test(retryAfter) ? Number(retryAfter) * 1000 : undefined;
+    retryAfter && /^\d+(?:\.\d+)?$/.test(retryAfter)
+      ? Number(retryAfter) * MILLISECONDS_PER_SECOND
+      : undefined;
   const dateDelay =
     retryAfter && seconds === undefined ? Date.parse(retryAfter) - Date.now() : undefined;
   const delay = seconds ?? dateDelay;
