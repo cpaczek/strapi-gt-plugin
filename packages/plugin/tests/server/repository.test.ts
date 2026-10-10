@@ -193,3 +193,17 @@ describe('durable queue persistence', () => {
     expect(summarizeJob(jobFixture())).not.toHaveProperty('settings');
   });
 });
+
+it.each(['translate', 'enqueue'] as const)(
+  'does not automatically repeat an interrupted paid %s request',
+  async (stage) => {
+    vi.useFakeTimers();
+    const { host } = persistenceFixture();
+    const repository = createRepository(host);
+    await repository.create(jobFixture({ stage }));
+    await repository.claim();
+    vi.setSystemTime(Date.now() + JOB_LEASE_MS + 1);
+    const recovered = await repository.claim();
+    expect(recovered).toMatchObject({ status: 'failed', error: { code: 'interrupted-request' } });
+  }
+);

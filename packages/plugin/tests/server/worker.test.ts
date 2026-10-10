@@ -44,13 +44,14 @@ const setup = () => {
   };
   const log = vi.fn();
   const apply = vi.fn(async () => undefined);
+  const operations = vi.fn(async () => ({ client, prepare: async () => prepared, apply }));
   const worker = createWorker({
     repository,
-    operations: async () => ({ client, prepare: async () => prepared, apply }),
+    operations,
     retryDelay: () => WORKER_POLL_MS,
     log,
   });
-  return { worker, repository, log, apply };
+  return { worker, repository, log, apply, operations };
 };
 afterEach(() => vi.useRealTimers());
 describe('worker lifecycle', () => {
@@ -183,4 +184,17 @@ describe('worker lifecycle', () => {
       classifyFailure({ diagnostic: { code: 'broken', text: 1, details: {} }, retryable: true })
         .retryable
     ).toBe(false));
+});
+
+it('saves an interrupted job without making another provider request', async () => {
+  const { worker, repository, apply, operations } = setup();
+  repository.claim.mockResolvedValueOnce(
+    jobFixture({ id: 1, status: 'failed', stage: 'translate', leaseOwner: 'owner', prepared })
+  );
+  await worker.execute();
+  expect(apply).not.toHaveBeenCalled();
+  expect(operations).not.toHaveBeenCalled();
+  expect(repository.completeStage).toHaveBeenCalledWith(
+    expect.objectContaining({ status: 'failed' })
+  );
 });
