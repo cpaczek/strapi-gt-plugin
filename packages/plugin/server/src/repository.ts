@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Core } from '@strapi/strapi';
+import type { PersistenceHost } from './persistence';
 import { z } from 'zod';
 import {
   JOB_LEASE_MS,
@@ -71,7 +71,7 @@ const jobColumns = (job: StoredJob) => ({
   entryDocumentId: job.documentId,
   payload: job,
 });
-export const createRepository = (strapi: Core.Strapi) => {
+export const createRepository = (strapi: PersistenceHost) => {
   const ensureLease = async (key: string): Promise<void> => {
     const found: unknown = await strapi.db.query(leaseUid).findOne({ where: { key } });
     if (found) return;
