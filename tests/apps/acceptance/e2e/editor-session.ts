@@ -1,32 +1,15 @@
-import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { expect, type Page } from '@playwright/test';
-import { z } from 'zod';
+import { loadBrowserAccount, loopbackOrigin, type TestAccount } from '../src/browser-fixture';
+export type { TestAccount } from '../src/browser-fixture';
 
 export const sourceTitle = 'The custody hearing of Dirt Block 47';
-const origin = new URL(process.env.ADMIN_URL ?? 'http://127.0.0.1:1337');
-if (
-  origin.protocol !== 'http:' ||
-  !['127.0.0.1', 'localhost'].includes(origin.hostname) ||
-  origin.username ||
-  origin.password
-)
-  throw new TypeError('Editor acceptance requires a loopback HTTP origin without credentials');
-export const adminOrigin = origin.origin;
-export interface TestAccount {
-  email: string;
-  password: string;
-}
-export const readTestAccount = async (): Promise<TestAccount> => {
-  const account = z
-    .object({ adminEmail: z.string(), adminPassword: z.string() })
-    .parse(
-      JSON.parse(
-        await readFile(resolve(import.meta.dirname, '../../../../.work/testbed/local.json'), 'utf8')
-      )
-    );
-  return { email: account.adminEmail, password: account.adminPassword };
-};
+export const adminOrigin = loopbackOrigin(process.env.ADMIN_URL ?? 'http://127.0.0.1:1337');
+export const readTestAccount = (): Promise<TestAccount> =>
+  loadBrowserAccount(
+    process.env.TESTBED_ACCOUNT_FILE ??
+      resolve(import.meta.dirname, '../../../../.work/testbed/local.json')
+  );
 export const signIn = async (page: Page, supplied?: TestAccount): Promise<void> => {
   const account = supplied ?? (await readTestAccount());
   await page.addLocatorHandler(
