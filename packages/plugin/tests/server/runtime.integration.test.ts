@@ -1122,3 +1122,69 @@ it('accepts the exact document-locale job limit as one atomic batch', async () =
   expect(new Set(response.jobs.map((job) => job.id)).size).toBe(MAX_JOBS_PER_REQUEST);
   expect(app().mock.requests).toHaveLength(before);
 }, 30_000);
+
+it('shows another editor latest locale result without exposing snapshots or values', async () => {
+  const source = await freshSource();
+  const id = await queue(source.documentId);
+  await finish(id);
+  const reader = await limitedActor({ read: ['title', 'summary', 'image'] });
+  const latest = await app().runtime.history(reader, {
+    page: 1,
+    contentType: 'api::article.article',
+    documentId: source.documentId,
+    latestPerLocale: true,
+  });
+  expect(latest.jobs[0]?.id).toBe(id);
+  expect(latest.total).toBe(1);
+  const summary = latest.jobs[0];
+  if (!summary) throw new Error('Missing locale summary');
+  for (const key of [
+    'prepared',
+    'settings',
+    'translations',
+    'file',
+    'remoteJobIds',
+    'actorId',
+    'runtimeProgress',
+  ])
+    expect(summary).not.toHaveProperty(key);
+  expect(JSON.stringify(summary)).not.toContain('A new article');
+  expect(
+    (
+      await app().runtime.history(reader, {
+        page: 1,
+        contentType: 'api::article.article',
+        documentId: source.documentId,
+      })
+    ).jobs
+  ).toEqual([]);
+  await expect(app().runtime.retry(id, reader)).rejects.toMatchObject({
+    diagnostic: { code: 'permission-denied' },
+  });
+});
+it('hides another editor locale result when a translated source field is not readable', async () => {
+  const source = await freshSource();
+  await finish(await queue(source.documentId));
+  const reader = await limitedActor({ read: ['title'] });
+  expect(
+    await app().runtime.history(reader, {
+      page: 1,
+      contentType: 'api::article.article',
+      documentId: source.documentId,
+      latestPerLocale: true,
+    })
+  ).toEqual({ jobs: [], total: 0 });
+});
+it('hides another editor locale result outside the reader source-locale grant', async () => {
+  const source = await freshSource();
+  await finish(await queue(source.documentId));
+  const reader = await limitedActor({ read: ['title', 'summary', 'image'], readLocales: ['fr'] });
+  expect(
+    await app().runtime.history(reader, {
+      page: 1,
+      contentType: 'api::article.article',
+      documentId: source.documentId,
+      latestPerLocale: true,
+    })
+  ).toEqual({ jobs: [], total: 0 });
+});
