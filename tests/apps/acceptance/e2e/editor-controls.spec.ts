@@ -336,6 +336,34 @@ test('bulk translation queues only the selected saved documents', async ({ page,
   releaseOptions();
   expect((await optionsLoaded).status()).toBe(200);
   await expect(page.getByRole('button', { name: 'Translate selected', exact: true })).toBeVisible();
+  for (const source of [second, first]) {
+    await page
+      .getByRole('row')
+      .filter({ has: page.getByText(source.title, { exact: true }) })
+      .getByRole('checkbox')
+      .uncheck();
+  }
+  await expect(page.getByRole('button', { name: 'Translate selected', exact: true })).toHaveCount(
+    0
+  );
+  for (const source of [unselected, first]) {
+    await page
+      .getByRole('row')
+      .filter({ has: page.getByText(source.title, { exact: true }) })
+      .getByRole('checkbox')
+      .check();
+  }
+  await expect(page.getByRole('button', { name: 'Translate selected', exact: true })).toBeVisible();
+  await page
+    .getByRole('row')
+    .filter({ has: page.getByText(unselected.title, { exact: true }) })
+    .getByRole('checkbox')
+    .uncheck();
+  await page
+    .getByRole('row')
+    .filter({ has: page.getByText(second.title, { exact: true }) })
+    .getByRole('checkbox')
+    .check();
   await page.getByRole('button', { name: 'Translate selected', exact: true }).click();
   const modal = page.getByRole('dialog', { name: 'Translate selected' });
   await modal.getByRole('checkbox', { name: 'Arabic (ar)', exact: true }).uncheck();
@@ -394,6 +422,16 @@ test('human target edits survive normal translation and force requires consent',
   await waitForJobs(editor.api, [source.documentId], await queueFrench(page));
   await openDocument(page, { documentId: source.documentId, locale: 'fr' });
   await expect(page.getByRole('textbox', { name: /^title\*?$/i }).first()).toHaveValue(humanTitle);
+  await page.goto(`${adminOrigin}/admin/me`);
+  await page.getByRole('combobox', { name: 'Interface mode' }).click();
+  await page.getByRole('option', { name: 'Dark mode', exact: true }).click();
+  const profileSaved = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/admin/users/me' &&
+      response.request().method() === 'PUT'
+  );
+  await page.locator('button[type="submit"]').click();
+  expect((await profileSaved).status()).toBe(200);
   await openDocument(page, source);
   await waitForJobs(editor.api, [source.documentId], await queueFrench(page, true));
   await openDocument(page, { documentId: source.documentId, locale: 'fr' });
