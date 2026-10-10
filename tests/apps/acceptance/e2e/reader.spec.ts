@@ -72,3 +72,8 @@ test('GT playground changes real local formatters and marks sample conversion', 
   expect(externalRequests).toEqual([]);
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
+
+test('an unknown document is a real 404', async ({ page }) => {
+  const response = await page.goto('/en/articles/never-saved-document');
+  expect(response?.status()).toBe(404);
+});
