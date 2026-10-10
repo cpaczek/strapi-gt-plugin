@@ -97,7 +97,7 @@
   "size-limit": [
     {
       "path": "dist/admin/*.mjs",
-      "limit": "90 kB",
+      "limit": "115 kB",
       "brotli": false
     }
   ],

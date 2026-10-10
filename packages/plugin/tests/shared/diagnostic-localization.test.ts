@@ -63,7 +63,7 @@ describe('localized diagnostics', () => {
   it('localizes the documentation label without translating its URL', () => {
     const source = messages.invalidKey();
     const result = diagnostics.localizeDiagnostic(source, (key) =>
-      String(key) === 'diagnostic.documentation' ? 'Documentación' : undefined
+      key === 'diagnostic.documentation' ? 'Documentación' : undefined
     );
     expect(result.text).toContain(`Documentación: ${source.docs}`);
     expect(result.docs).toBe(source.docs);
@@ -136,7 +136,9 @@ describe('localized diagnostics', () => {
       level: 'success',
       docs: 'https://example.com/help?locale=ar',
     };
-    const translate = vi.fn(() => 'Choisissez une langue');
+    const translate = vi.fn((key: diagnostics.DiagnosticMessageKey) =>
+      key === 'diagnostic.documentation' ? 'Documentation' : 'Choisissez une langue'
+    );
     const result = diagnostics.localizeDiagnostic(source, translate);
     expect(result.details).toEqual(source.details);
     expect(result.docs).toBe(source.docs);
@@ -147,6 +149,7 @@ describe('localized diagnostics', () => {
     expect(translate.mock.calls).toEqual([
       ['diagnostic.unsupported-locale.happened'],
       ['diagnostic.unsupported-locale.fix'],
+      ['diagnostic.documentation'],
     ]);
   });
   it('preserves a deliberately absent documentation link', () => {

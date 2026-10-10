@@ -10,6 +10,7 @@ export interface MessageParts {
   fallback?: string;
   details?: Record<string, string>;
   docs?: string;
+  docsLabel?: string;
   level?: Diagnostic['level'];
 }
 
@@ -59,7 +60,8 @@ export const buildMessage = (parts: MessageParts): Diagnostic => {
     Object.entries(parts.details ?? {}).map(([key, value]) => [key, formatUnknownError(value)])
   );
   const detailText = Object.values(details).map(sentence);
-  const text = `${MESSAGE_PREFIX} ${[...phrases, ...detailText].join(' ')}${parts.docs ? ` Documentation: ${parts.docs}` : ''}`;
+  const docsLabel = parts.docsLabel?.trim() || english['diagnostic.documentation'];
+  const text = `${MESSAGE_PREFIX} ${[...phrases, ...detailText].join(' ')}${parts.docs ? ` ${docsLabel}: ${parts.docs}` : ''}`;
   return {
     code: parts.code,
     level: parts.level ?? 'error',
@@ -209,21 +211,25 @@ const definitions = {
   },
 } satisfies Record<string, MessageDefinition>;
 
+const phrase = (
+  key: DiagnosticMessageKey | undefined,
+  translate?: DiagnosticTranslator
+): string | undefined => {
+  if (!key) return undefined;
+  const translated = translate?.(key);
+  return translated?.trim() && translated !== key ? translated : english[key];
+};
+
 const definitionParts = (
   definition: MessageDefinition,
   translate?: DiagnosticTranslator
 ): MessageParts => {
-  const phrase = (key: DiagnosticMessageKey | undefined): string | undefined => {
-    if (!key) return undefined;
-    const translated = translate?.(key);
-    return translated?.trim() && translated !== key ? translated : english[key];
-  };
   return {
     code: definition.code,
-    happened: phrase(definition.happened) ?? english[definition.happened],
-    why: phrase(definition.why),
-    fix: phrase(definition.fix),
-    fallback: phrase(definition.fallback),
+    happened: phrase(definition.happened, translate) ?? english[definition.happened],
+    why: phrase(definition.why, translate),
+    fix: phrase(definition.fix, translate),
+    fallback: phrase(definition.fallback, translate),
     level: definition.level,
   };
 };
@@ -241,6 +247,7 @@ export const localizeDiagnostic = (
     level: diagnostic.level,
     details: diagnostic.details,
     docs: diagnostic.docs,
+    docsLabel: diagnostic.docs ? phrase('diagnostic.documentation', translate) : undefined,
   });
 };
 

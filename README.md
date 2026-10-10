@@ -128,6 +128,9 @@ apply a source snapshot or target state that changed while the job was running.
 | Numbers, booleans, dates, times, enums, JSON and passwords | Never sent for translation                                                                          |
 | Private or nonlocalized fields                             | Excluded                                                                                            |
 
+Existing target relations are preserved. A newly created locale may have no
+category or related-entry links; assign those separately in Content Manager.
+
 Edit localized media metadata in the Translation panel. Published Content API GET
 responses include valid overrides for populated media. Other delivery paths need
 explicit validation; see [localized media metadata](docs/media.md).
@@ -206,9 +209,9 @@ Do not publish the plugin or change remote configuration.
   marked for repeatable testing and do not demonstrate language quality. Live mode
   uses your GT account; review translated stories before publishing them.
 - Strapi 5.57's native media carousel has an invalid `aria-selected` attribute on
-  a group. Whole-editor accessibility includes that host issue; plugin settings
-  and history have whole-page checks, with panel and dialog checks scoped to the
-  plugin controls.
+  a group, and its read-only content list can have an unfocusable scroll region.
+  Plugin settings and history have whole-page accessibility checks. Native editor
+  checks cover plugin panels and dialogs with all rules enabled.
 - PostgreSQL with `pg` 8.23 can report a concurrent-query deprecation during
   Strapi's dynamic-zone writes. The PostgreSQL translation and publication tests
   pass, but this upstream warning remains.

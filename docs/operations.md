@@ -99,3 +99,10 @@ The requests use your GT account and can incur usage charges. The small file nam
 `strapi-gt-smoke.json` remains in the GT project. Review it in the dashboard after
 the test. A failed or timed-out request is not automatically repeated; check the
 existing GT activity before rerunning the command.
+
+## Interface languages
+
+The admin labels and diagnostic guidance support English, Spanish, French and
+Arabic through Strapi's profile language setting. Server logs keep the canonical
+English wording. Variable technical details retain the server's wording; keys and
+other credentials are redacted before display.

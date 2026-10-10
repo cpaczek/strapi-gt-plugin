@@ -167,5 +167,6 @@
   "diagnostic.missing-locale.happened": "The target locale does not exist for this document",
   "diagnostic.missing-locale.fix": "Enable creation of missing locales and confirm your create permission",
   "diagnostic.source-locale-mismatch.happened": "The GT project uses a different source locale",
-  "diagnostic.source-locale-mismatch.fix": "Select the matching GT project before uploading translation files"
+  "diagnostic.source-locale-mismatch.fix": "Select the matching GT project before uploading translation files",
+  "diagnostic.documentation": "Documentation"
 }
