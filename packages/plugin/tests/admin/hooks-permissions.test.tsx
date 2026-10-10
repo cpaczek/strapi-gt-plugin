@@ -17,8 +17,13 @@ const host = vi.hoisted(() => ({
   post: vi.fn(),
   put: vi.fn(),
   permissions: vi.fn(),
+  layout: vi.fn(),
 }));
-vi.mock('@strapi/strapi/admin', () => ({ useFetchClient: () => host, useRBAC: host.permissions }));
+vi.mock('@strapi/strapi/admin', () => ({
+  useFetchClient: () => host,
+  useRBAC: host.permissions,
+  unstable_useDocumentLayout: host.layout,
+}));
 const wrapper = ({ children }: { children: ReactNode }) => (
   <IntlProvider locale="en">{children}</IntlProvider>
 );
@@ -42,10 +47,83 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   host.get.mockResolvedValue({ data: options });
+  host.layout.mockReturnValue({
+    isLoading: false,
+    list: { options: { i18n: { localized: true } } },
+  });
   host.permissions.mockReturnValue({
     allowedActions: { canTranslate: true, canBulkTranslate: true },
     isLoading: false,
     permissions: [],
+  });
+});
+describe('bulk action eligibility from the loaded native layout', () => {
+  const selection = {
+    model: context.model,
+    collectionType: 'collection-types',
+    documents: [{ documentId: 'one' }],
+  };
+  it('exposes the eligible action before GT option metadata resolves', () => {
+    host.get.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => TranslateBulkAction(selection), { wrapper });
+    expect(result.current?.label).toBe('Translate selected');
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('uses the current model for the public layout hook', () => {
+    renderHook(() => TranslateBulkAction(selection), { wrapper });
+    expect(host.layout).toHaveBeenCalledWith(context.model);
+  });
+  it.each([false, 'true', undefined])('does not infer localization from %s', (localized) => {
+    host.layout.mockReturnValue({ isLoading: false, list: { options: { i18n: { localized } } } });
+    const { result } = renderHook(() => TranslateBulkAction(selection), { wrapper });
+    expect(result.current).toBeNull();
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('hides the action when the layout has no i18n configuration', () => {
+    host.layout.mockReturnValue({ isLoading: false, list: { options: {} } });
+    const { result } = renderHook(() => TranslateBulkAction(selection), { wrapper });
+    expect(result.current).toBeNull();
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('hides the action while the native layout is loading', () => {
+    host.layout.mockReturnValue({
+      isLoading: true,
+      list: { options: { i18n: { localized: true } } },
+    });
+    const { result } = renderHook(() => TranslateBulkAction(selection), { wrapper });
+    expect(result.current).toBeNull();
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('hides the action after a native layout error', () => {
+    host.layout.mockReturnValue({
+      isLoading: false,
+      error: { name: 'Layout failure' },
+      list: { options: { i18n: { localized: true } } },
+    });
+    const { result } = renderHook(() => TranslateBulkAction(selection), { wrapper });
+    expect(result.current).toBeNull();
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('does not bypass a pending permission check', () => {
+    host.permissions.mockReturnValue({
+      isLoading: true,
+      allowedActions: { canBulkTranslate: true },
+    });
+    const { result } = renderHook(() => TranslateBulkAction(selection), { wrapper });
+    expect(result.current).toBeNull();
+  });
+  it('updates eligibility when selecting a different model', () => {
+    const { result, rerender } = renderHook(
+      ({ model }) => TranslateBulkAction({ ...selection, model }),
+      {
+        initialProps: { model: context.model },
+        wrapper,
+      }
+    );
+    expect(result.current?.label).toBe('Translate selected');
+    host.layout.mockReturnValue({ isLoading: false, list: { options: {} } });
+    rerender({ model: 'api::category.category' });
+    expect(result.current).toBeNull();
   });
 });
 describe('host permission and request behavior', () => {
