@@ -6,8 +6,9 @@ import { isReaderLocale } from '../../lib/content';
 import '../styles.css';
 
 export const metadata: Metadata = {
-  title: { default: 'Margin | Field notes', template: '%s | Margin' },
-  description: 'Stories from the places between destinations.',
+  title: { default: 'The Ender Post | Tall tales. Petty theft.', template: '%s | The Ender Post' },
+  description:
+    'An unofficial Enderman fan zine. Original stories, questionable advice, and several missing blocks.',
 };
 export default async function LocaleLayout({
   children,
@@ -26,16 +27,19 @@ export default async function LocaleLayout({
         </a>
         <header className="masthead">
           <Link className="wordmark" href={`/${locale}`}>
-            margin<span className="wordmark-dot">.</span>
+            ender<span className="wordmark-dot">post</span>
           </Link>
-          <span className="masthead-note">A journal of close attention</span>
-          <span className="issue">Vol. 01 / The coast</span>
+          <span className="masthead-note">Unlicensed dispatches from the void</span>
+          <span className="issue">Issue 001 / Do not stare</span>
         </header>
         {children}
         <footer className="footer">
-          <Link href={`/${locale}`}>margin.</Link>
-          <p>Stories from the places between destinations.</p>
-          <span>Made for a slower read.</span>
+          <Link href={`/${locale}`}>ENDER POST</Link>
+          <p>
+            An unofficial Minecraft fan zine. No affiliation with Mojang, Microsoft, or General
+            Translation.
+          </p>
+          <span>Keep your eyes to yourself.</span>
         </footer>
       </body>
     </html>

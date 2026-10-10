@@ -13,6 +13,7 @@
     "format": "oxfmt --check ."
   },
   "dependencies": {
+    "generaltranslation": "catalog:",
     "mdast-util-from-markdown": "catalog:",
     "next": "catalog:",
     "react": "catalog:next",

@@ -77,8 +77,8 @@ describe('real Strapi database behavior', () => {
     const drafts = await app()
       .documents('api::article.article')
       .findMany({ locale: 'en', status: 'draft' });
-    expect(published).toHaveLength(1);
-    expect(drafts).toHaveLength(2);
+    expect(published).toHaveLength(3);
+    expect(drafts).toHaveLength(4);
   });
   it('creates a localized draft under the source document identity', async () => {
     const source = articleRecord.parse(

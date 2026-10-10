@@ -134,6 +134,27 @@
     "contactEmail": {
       "type": "email",
       "private": true
+    },
+    "glossary": {
+      "type": "component",
+      "component": "editorial.glossary-entry",
+      "repeatable": true,
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "editorialNote": {
+      "type": "text",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "archivalNumber": {
+      "type": "biginteger"
     }
   }
 }

@@ -38,28 +38,31 @@ describe('editorial acceptance content', () => {
       budget: 1250.5,
       contactEmail: 'editor@example.invalid',
     });
-    expect(category).toMatchObject({ name: 'Coasts', slug: 'coasts' });
+    expect(category).toMatchObject({
+      name: 'Certified voidposting',
+      slug: 'certified-voidposting',
+    });
   });
 });
 
 describe('seed control boundaries', () => {
   it('keeps the draft headline distinct from the published headline', () => {
-    expect(articles[0]?.fields.title).not.toBe(articles[1]?.fields.title);
+    expect(articles[0]?.fields.title).not.toBe(articles[3]?.fields.title);
   });
   it('has a deliberate empty Markdown control', () => {
-    expect(articles[1]?.fields.markdown).toBe('');
+    expect(articles[3]?.fields.markdown).toBe('');
   });
   it('has empty repeatable components in the draft', () => {
-    expect(articles[1]?.fields.credits).toEqual([]);
+    expect(articles[3]?.fields.credits).toEqual([]);
   });
   it('has an empty dynamic zone in the draft', () => {
-    expect(articles[1]?.fields.sections).toEqual([]);
+    expect(articles[3]?.fields.sections).toEqual([]);
   });
   it('preserves false boolean values', () => {
-    expect(articles[1]?.fields.featured).toBe(false);
+    expect(articles[3]?.fields.featured).toBe(false);
   });
   it('preserves numeric zero values', () => {
-    expect(articles[1]?.fields.budget).toBe(0);
+    expect(articles[3]?.fields.budget).toBe(0);
   });
   it('contains a precision control for floating point fields', () => {
     expect(articles[0]?.fields.preciseDistance).toBe(3.125);

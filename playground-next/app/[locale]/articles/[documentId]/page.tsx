@@ -42,11 +42,11 @@ export default async function ArticlePage({ params }: ArticleProps) {
       </div>
       <article>
         <header className="article-header">
-          <span className="eyebrow">{article.category?.name ?? 'Field notes'}</span>
+          <span className="eyebrow">{article.category?.name ?? 'Void dispatch'}</span>
           <h1>{article.title}</h1>
           <p className="standfirst">{article.summary}</p>
           <div className="article-byline">
-            <span>By {article.credits[0]?.name ?? 'The editors'}</span>
+            <span>By {article.credits[0]?.name ?? 'The editorial void'}</span>
             <span>{article.readingMinutes ?? 5} min read</span>
           </div>
         </header>
@@ -99,11 +99,32 @@ export default async function ArticlePage({ params }: ArticleProps) {
           })}
           {article.markdown && (
             <section className="field-guide">
-              <span className="eyebrow">From the notebook</span>
+              <span className="eyebrow">Recovered from the evidence locker</span>
               <Markdown source={article.markdown} />
             </section>
           )}
         </div>
+        {article.glossary.length > 0 && (
+          <section className="glossary" aria-labelledby="glossary-heading">
+            <div>
+              <span className="eyebrow">Know your void</span>
+              <h2 id="glossary-heading">
+                The unofficial
+                <br />
+                Ender dictionary.
+              </h2>
+              <p>{article.editorialNote}</p>
+            </div>
+            <dl>
+              {article.glossary.map((entry) => (
+                <div key={entry.term}>
+                  <dt>{entry.term}</dt>
+                  <dd>{entry.meaning}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
         <div className="credits">
           {article.credits.map((credit, index) => (
             <p key={index}>

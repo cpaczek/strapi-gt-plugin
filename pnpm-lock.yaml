@@ -541,6 +541,9 @@ importers:
 
   playground-next:
     dependencies:
+      generaltranslation:
+        specifier: 'catalog:'
+        version: 9.5.6
       mdast-util-from-markdown:
         specifier: 'catalog:'
         version: 2.1.0(supports-color@5.5.0)

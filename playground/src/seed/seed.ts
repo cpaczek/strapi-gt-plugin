@@ -1,5 +1,5 @@
 import type { Core } from '@strapi/strapi';
-import { articles, category, locales } from './content';
+import { articles, category, locales, editorialFieldContext } from './content';
 
 const numericId = (record: unknown): number => {
   if (
@@ -13,7 +13,7 @@ const numericId = (record: unknown): number => {
 };
 
 export const seedEditorialContent = async (strapi: Core.Strapi): Promise<void> => {
-  const store = strapi.store({ type: 'core', name: 'editorial-example', key: 'seed-v1' });
+  const store = strapi.store({ type: 'core', name: 'editorial-example', key: 'seed-v2' });
   if (await store.get()) return;
   for (const locale of locales) {
     const existing: unknown = await strapi.db
@@ -26,17 +26,18 @@ export const seedEditorialContent = async (strapi: Core.Strapi): Promise<void> =
     .create({ data: category });
   const file: unknown = await strapi.db.query('plugin::upload.file').create({
     data: {
-      name: 'Tidal study',
-      alternativeText: 'Abstract bands of sea, sand, and a small coastal house',
-      caption: 'A study of the coast at low tide.',
+      name: 'The block custody portrait',
+      alternativeText:
+        'Original pixel drawing of a tall purple-eyed character holding a tiny grass block beneath two moons',
+      caption: 'Exhibit A. The block declined to comment.',
       width: 1600,
       height: 1000,
       formats: {},
-      hash: 'editorial_tidal_study',
+      hash: 'ender_block_custody',
       ext: '.svg',
       mime: 'image/svg+xml',
       size: 1.2,
-      url: '/images/tidal-study.svg',
+      url: '/images/block-custody.svg',
       provider: 'local',
     },
   });
@@ -77,5 +78,32 @@ export const seedEditorialContent = async (strapi: Core.Strapi): Promise<void> =
         .query('plugin::users-permissions.permission')
         .create({ data: { action, role: numericId(publicRole) } });
   }
+  await strapi.store({ type: 'plugin', name: 'general-translation', key: 'settings' }).set({
+    value: {
+      projectId: process.env.GT_PROJECT_ID ?? 'editorial',
+      sourceLocale: 'en',
+      targetLocales: ['fr', 'ar'],
+      localeMapping: {},
+      createMissingLocales: true,
+      autoPublish: false,
+      automaticMode: 'off',
+      contentTypes: {
+        'api::article.article': {
+          mediaMetadata: false,
+          fields: {
+            title: { translate: true, context: editorialFieldContext },
+            summary: { translate: true, context: editorialFieldContext },
+            body: { translate: true, context: editorialFieldContext },
+            markdown: { translate: true, context: editorialFieldContext },
+            sections: { translate: true, context: editorialFieldContext },
+            glossary: { translate: true, context: editorialFieldContext },
+            'glossary.term': { translate: false },
+            editorialNote: { translate: true, context: editorialFieldContext },
+            slug: { translate: false, uidStrategy: 'regenerate', sourceField: 'title' },
+          },
+        },
+      },
+    },
+  });
   await store.set({ value: true });
 };

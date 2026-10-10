@@ -76,6 +76,8 @@ const articleSchema = z.object({
   publishedAt: z.string().nullable(),
   body: z.array(blockSchema).default([]),
   markdown: z.string().nullable().optional(),
+  glossary: z.array(z.object({ term: z.string(), meaning: z.string() })).default([]),
+  editorialNote: z.string().nullable().optional(),
   readingMinutes: z.number().nullable().optional(),
   observationDate: z.string().nullable().optional(),
   cover: mediaSchema.nullable().optional(),
@@ -101,6 +103,7 @@ export const createContentReader = (options: ReaderOptions) => {
     url.searchParams.set('populate[cover]', 'true');
     url.searchParams.set('populate[category]', 'true');
     url.searchParams.set('populate[credits]', 'true');
+    url.searchParams.set('populate[glossary]', 'true');
     url.searchParams.set('populate[sections][on][editorial.pull-quote][populate]', '*');
     url.searchParams.set('populate[sections][on][editorial.text-section][populate]', '*');
     url.searchParams.set('populate[sections][on][editorial.gallery][populate]', '*');
