@@ -55,9 +55,11 @@ export default async function ArticlePage({ params }: ArticleProps) {
         <header className="article-header">
           <span className="eyebrow">{article.category?.name ?? 'Void dispatch'}</span>
           <h1>{article.title}</h1>
-          <p className="standfirst">{article.summary}</p>
+          {article.summary && <p className="standfirst">{article.summary}</p>}
           <div className="article-byline">
-            <span>By {article.credits[0]?.name ?? 'The editorial void'}</span>
+            <span>
+              By {article.credits.find((credit) => credit.name)?.name ?? 'The editorial void'}
+            </span>
             <span>{article.readingMinutes ?? 5} min read</span>
           </div>
         </header>
@@ -67,7 +69,7 @@ export default async function ArticlePage({ params }: ArticleProps) {
               src={mediaUrl(article.cover.url)}
               width={1600}
               height={1000}
-              priority
+              loading="eager"
               sizes="100vw"
               alt={article.cover.alternativeText ?? ''}
             />
@@ -87,7 +89,7 @@ export default async function ArticlePage({ params }: ArticleProps) {
             if (section.__component === 'editorial.text-section')
               return (
                 <section key={index}>
-                  <h2>{section.heading}</h2>
+                  {section.heading && <h2>{section.heading}</h2>}
                   <Blocks nodes={section.body} />
                 </section>
               );

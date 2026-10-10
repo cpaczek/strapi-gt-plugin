@@ -52,7 +52,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                     src={mediaUrl(article.cover.url)}
                     width={1600}
                     height={1000}
-                    priority={index === 0}
+                    loading={index === 0 ? 'eager' : 'lazy'}
                     sizes="(max-width: 760px) 100vw, 65vw"
                     alt=""
                   />

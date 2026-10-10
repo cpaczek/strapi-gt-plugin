@@ -50,21 +50,30 @@ const blockSchema: z.ZodType<BlockNode> = z.lazy(() =>
       .optional(),
   })
 );
+const optionalText = z
+  .string()
+  .nullish()
+  .transform((value) => value ?? '');
+const optionalArray = <Schema extends z.ZodType>(schema: Schema) =>
+  z
+    .array(schema)
+    .nullish()
+    .transform((value) => value ?? []);
 const sectionSchema = z.discriminatedUnion('__component', [
   z.object({
     __component: z.literal('editorial.pull-quote'),
-    quote: z.string(),
+    quote: optionalText,
     attribution: z.string().nullable().optional(),
   }),
   z.object({
     __component: z.literal('editorial.text-section'),
-    heading: z.string(),
-    body: z.array(blockSchema),
+    heading: optionalText,
+    body: optionalArray(blockSchema),
   }),
   z.object({
     __component: z.literal('editorial.gallery'),
     title: z.string().nullable().optional(),
-    images: z.array(mediaSchema).default([]),
+    images: optionalArray(mediaSchema),
   }),
 ]);
 const articleSchema = z.object({
@@ -72,18 +81,18 @@ const articleSchema = z.object({
   locale: z.string(),
   title: z.string(),
   slug: z.string(),
-  summary: z.string(),
+  summary: optionalText,
   publishedAt: z.string().nullable(),
-  body: z.array(blockSchema).default([]),
+  body: optionalArray(blockSchema),
   markdown: z.string().nullable().optional(),
-  glossary: z.array(z.object({ term: z.string(), meaning: z.string() })).default([]),
+  glossary: optionalArray(z.object({ term: z.string(), meaning: z.string() })),
   editorialNote: z.string().nullable().optional(),
   readingMinutes: z.number().nullable().optional(),
   observationDate: z.string().nullable().optional(),
   cover: mediaSchema.nullable().optional(),
-  sections: z.array(sectionSchema).default([]),
+  sections: optionalArray(sectionSchema),
   category: z.object({ name: z.string() }).nullable().optional(),
-  credits: z.array(z.object({ name: z.string(), role: z.string() })).default([]),
+  credits: optionalArray(z.object({ name: optionalText, role: optionalText })),
 });
 export type Article = z.infer<typeof articleSchema>;
 interface ReaderOptions {
