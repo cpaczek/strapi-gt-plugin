@@ -203,3 +203,302 @@ describe('durable runtime progress', () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('runtime checkpoint adversarial boundaries', () => {
+  it('does not resend fully completed chunks after a process restart', async () => {
+    const fetcher = stubRuntime((body) => json(success(body)));
+    let completed: Record<string, string> = {};
+    const onProgress = async (next: Record<string, string>) => {
+      completed = structuredClone(next);
+    };
+    const expected = await createGtClient(configuration).translate(request, {
+      completed,
+      onProgress,
+    });
+    const calls = fetcher.mock.calls.length;
+    const resumed = await createGtClient(configuration).translate(request, {
+      completed,
+      onProgress,
+    });
+    expect(resumed).toEqual(expected);
+    expect(fetcher).toHaveBeenCalledTimes(calls);
+  });
+  it('keeps checkpoint identity stable across segment and object-key reordering', async () => {
+    const fetcher = stubRuntime((body) => json(success(body)));
+    let completed: Record<string, string> = {};
+    const onProgress = async (next: Record<string, string>) => {
+      completed = structuredClone(next);
+    };
+    const expected = await createGtClient(configuration).translate(request, {
+      completed,
+      onProgress,
+    });
+    const calls = fetcher.mock.calls.length;
+    await expect(
+      createGtClient(configuration).translate(
+        { ...request, segments: [...request.segments].reverse() },
+        { completed: Object.fromEntries(Object.entries(completed).reverse()), onProgress }
+      )
+    ).resolves.toEqual(expected);
+    expect(fetcher).toHaveBeenCalledTimes(calls);
+  });
+  it.each(['text', 'context', 'locale', 'project', 'path'])(
+    'rejects checkpoints from a changed %s before HTTP',
+    async (changed) => {
+      const fetcher = stubRuntime((body) => json(success(body)));
+      let completed: Record<string, string> = {};
+      const onProgress = async (next: Record<string, string>) => {
+        completed = structuredClone(next);
+      };
+      const initial = { ...request, segments: [segment('title', 'Bank', 'River')] };
+      await createGtClient(configuration).translate(initial, { completed, onProgress });
+      const updated = {
+        ...initial,
+        targetLocale: changed === 'locale' ? 'ar' : 'fr',
+        segments: [
+          segment(
+            'title',
+            changed === 'text' ? 'New text' : 'Bank',
+            changed === 'context' ? 'Finance' : 'River'
+          ),
+        ],
+      };
+      if (changed === 'path' && updated.segments[0]) updated.segments[0].path = ['different'];
+      await expect(
+        createGtClient({
+          ...configuration,
+          projectId: changed === 'project' ? 'other' : configuration.projectId,
+        }).translate(updated, { completed, onProgress })
+      ).rejects.toMatchObject({ acceptance: 'not-sent', retryable: false });
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+  );
+  it('rejects unknown keys and invalid checkpoint value types before HTTP', async () => {
+    const fetcher = stubRuntime((body) => json(success(body)));
+    const onProgress = vi.fn(async () => {});
+    await expect(
+      createGtClient(configuration).translate(request, {
+        completed: { unknown: 'Text' },
+        onProgress,
+      })
+    ).rejects.toMatchObject({ acceptance: 'not-sent' });
+    const invalid: Record<string, string> = {};
+    Object.defineProperty(invalid, 'bad', { value: 5, enumerable: true });
+    await expect(
+      createGtClient(configuration).translate(request, { completed: invalid, onProgress })
+    ).rejects.toMatchObject({ acceptance: 'not-sent' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('resumes split RTL and grapheme-rich fields without retranslating completed chunks', async () => {
+    const text = ' العربية 👩🏽‍🚀 e\u0301\n'.repeat(1500);
+    const large = { ...request, segments: [segment('large', text, 'Quotation')] };
+    const sent: string[][] = [];
+    let calls = 0;
+    stubRuntime((body) => {
+      calls += 1;
+      sent.push(Object.keys(runtimeSchema.parse(body).requests));
+      return calls === 2 ? json({ error: 'rate-limit' }, 429) : json(success(body));
+    });
+    let completed: Record<string, string> = {};
+    const onProgress = async (next: Record<string, string>) => {
+      completed = structuredClone(next);
+    };
+    await expect(
+      createGtClient(configuration).translate(large, { completed, onProgress })
+    ).rejects.toMatchObject({ acceptance: 'rejected' });
+    const first = sent[0];
+    await expect(
+      createGtClient(configuration).translate(large, { completed, onProgress })
+    ).resolves.toEqual({ large: text });
+    expect(sent.filter((ids) => JSON.stringify(ids) === JSON.stringify(first))).toHaveLength(1);
+  });
+  it('keeps caller-owned checkpoints and callback snapshots separate from reconstruction', async () => {
+    stubRuntime((body) => json(success(body)));
+    const completed: Record<string, string> = {};
+    const onProgress = async (next: Record<string, string>) => {
+      for (const key of Object.keys(next)) next[key] = 'Mutated callback';
+    };
+    await expect(
+      createGtClient(configuration).translate(
+        { ...request, segments: [segment('title', 'Hello')] },
+        { completed, onProgress }
+      )
+    ).resolves.toEqual({ title: 'Hello' });
+    expect(completed).toEqual({});
+  });
+  it('persists valid successes beside malformed items and fails uncertain', async () => {
+    stubRuntime(() =>
+      json({
+        first: { success: true, translation: 'Saved', dataFormat: 'STRING', locale: 'fr' },
+        second: { success: true, translation: 4, dataFormat: 'STRING', locale: 'fr' },
+      })
+    );
+    let completed: Record<string, string> = {};
+    await expect(
+      createGtClient(configuration).translate(
+        { ...request, segments: [segment('first'), segment('second')] },
+        {
+          completed,
+          onProgress: async (next) => {
+            completed = next;
+          },
+        }
+      )
+    ).rejects.toMatchObject({ acceptance: 'unknown', retryable: false });
+    expect(Object.values(completed)).toEqual(['Saved']);
+  });
+  it('never checkpoints unexpected provider IDs', async () => {
+    stubRuntime((body) =>
+      json({
+        ...success(body),
+        unexpected: {
+          success: true,
+          translation: 'Unrequested',
+          dataFormat: 'STRING',
+          locale: 'fr',
+        },
+      })
+    );
+    let completed: Record<string, string> = {};
+    await expect(
+      createGtClient(configuration).translate(
+        { ...request, segments: [segment()] },
+        {
+          completed,
+          onProgress: async (next) => {
+            completed = next;
+          },
+        }
+      )
+    ).rejects.toMatchObject({ acceptance: 'unknown' });
+    expect(Object.values(completed)).toEqual(['Hello']);
+  });
+  it('retains validated successes regardless of the order of per-item failures', async () => {
+    stubRuntime(() =>
+      json({
+        first: { success: false, code: 503, error: 'Try later' },
+        second: { success: true, translation: 'Saved', dataFormat: 'STRING', locale: 'fr' },
+      })
+    );
+    let completed: Record<string, string> = {};
+    await expect(
+      createGtClient(configuration).translate(
+        { ...request, segments: [segment('first'), segment('second')] },
+        {
+          completed,
+          onProgress: async (next) => {
+            completed = next;
+          },
+        }
+      )
+    ).rejects.toMatchObject({ acceptance: 'rejected', httpStatus: 503, retryable: true });
+    expect(Object.values(completed)).toEqual(['Saved']);
+  });
+  it('prioritizes a permanent rejection over another item that can retry', async () => {
+    stubRuntime(() =>
+      json({
+        first: { success: false, code: 429, error: 'Wait' },
+        second: { success: false, code: 401, error: 'Key' },
+      })
+    );
+    await expect(
+      createGtClient(configuration).translate(
+        { ...request, segments: [segment('first'), segment('second')] },
+        { completed: {}, onProgress: async () => {} }
+      )
+    ).rejects.toMatchObject({ acceptance: 'rejected', httpStatus: 401, retryable: false });
+  });
+  it('runs concurrent checkpointed requests without sharing progress', async () => {
+    stubRuntime((body) => json(success(body)));
+    const snapshots: Record<string, string>[] = [];
+    const results = await Promise.all(
+      ['One', 'Two'].map((text) =>
+        createGtClient(configuration).translate(
+          { ...request, segments: [segment('same', text)] },
+          {
+            completed: {},
+            onProgress: async (next) => {
+              snapshots.push(next);
+            },
+          }
+        )
+      )
+    );
+    expect(results).toEqual([{ same: 'One' }, { same: 'Two' }]);
+    expect(new Set(snapshots.flatMap(Object.keys)).size).toBe(2);
+  });
+  it('performs no remote or progress work for an empty request', async () => {
+    const fetcher = stubRuntime((body) => json(success(body)));
+    const onProgress = vi.fn(async () => {});
+    await expect(
+      createGtClient(configuration).translate(
+        { ...request, segments: [] },
+        { completed: {}, onProgress }
+      )
+    ).resolves.toEqual({});
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(onProgress).not.toHaveBeenCalled();
+  });
+});
+
+describe('paid request acceptance semantics', () => {
+  const reference = { fileId: 'file', versionId: 'version', branchId: 'branch' };
+  it.each([408, 500, 503])(
+    'treats HTTP %i as uncertain for both paid operations',
+    async (status) => {
+      stubRuntime(() => json({ error: 'Request failed' }, status));
+      await expect(createGtClient(configuration).translate(request)).rejects.toMatchObject({
+        acceptance: 'unknown',
+        httpStatus: status,
+        retryable: false,
+        diagnostic: { code: 'interrupted-request' },
+      });
+      await expect(
+        createGtClient(configuration).enqueue(reference, request, false)
+      ).rejects.toMatchObject({ acceptance: 'unknown', httpStatus: status, retryable: false });
+    }
+  );
+  it.each([425, 429])(
+    'treats HTTP %i as an explicit rejection for paid operations',
+    async (status) => {
+      stubRuntime(() => json({ error: 'Wait' }, status));
+      await expect(
+        createGtClient(configuration).enqueue(reference, request, false)
+      ).rejects.toMatchObject({ acceptance: 'rejected', httpStatus: status, retryable: true });
+    }
+  );
+  it('marks an enqueue transport failure uncertain and does not leak failure details', async () => {
+    stubRuntime(() => {
+      throw new Error(configuration.apiKey);
+    });
+    await expect(
+      createGtClient(configuration).enqueue(reference, request, false)
+    ).rejects.toMatchObject({
+      acceptance: 'unknown',
+      retryable: false,
+      diagnostic: { code: 'interrupted-request' },
+    });
+  });
+  it('marks malformed accepted enqueue responses uncertain', async () => {
+    stubRuntime(() => json({ invalid: 'result' }));
+    await expect(
+      createGtClient(configuration).enqueue(reference, request, false)
+    ).rejects.toMatchObject({ acceptance: 'unknown', retryable: false });
+  });
+  it('keeps polling and download transport failures retryable', async () => {
+    stubRuntime(() => {
+      throw new Error('Disconnected');
+    });
+    await expect(
+      createGtClient(configuration).poll(reference, 'fr', ['job'])
+    ).rejects.toMatchObject({
+      acceptance: 'unknown',
+      retryable: true,
+      diagnostic: { code: 'network-failure' },
+    });
+    await expect(createGtClient(configuration).download(reference, 'fr')).rejects.toMatchObject({
+      acceptance: 'unknown',
+      retryable: true,
+    });
+  });
+});
