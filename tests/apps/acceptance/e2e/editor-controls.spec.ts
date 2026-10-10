@@ -340,8 +340,6 @@ test('bulk translation queues only the selected saved documents', async ({ page,
       .filter({ has: page.getByText(source.title, { exact: true }) });
     await row.getByRole('checkbox').check();
   }
-  releaseOptions();
-  expect((await optionsLoaded).status()).toBe(200);
   await expect(page.getByRole('button', { name: 'Translate selected', exact: true })).toBeVisible();
   for (const source of [second, first]) {
     await page
@@ -373,6 +371,9 @@ test('bulk translation queues only the selected saved documents', async ({ page,
     .check();
   await page.getByRole('button', { name: 'Translate selected', exact: true }).click();
   const modal = page.getByRole('dialog', { name: 'Translate selected' });
+  await expect(modal).toBeVisible();
+  releaseOptions();
+  expect((await optionsLoaded).status()).toBe(200);
   await modal.getByRole('checkbox', { name: 'Arabic (ar)', exact: true }).uncheck();
   const queued = page.waitForResponse(
     (response) =>

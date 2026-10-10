@@ -1,6 +1,6 @@
 import { Button, Flex } from '@strapi/design-system';
 import { Loading, Notice } from './components/Controls';
-import { useRBAC } from '@strapi/strapi/admin';
+import { useRBAC, unstable_useDocumentLayout as useDocumentLayout } from '@strapi/strapi/admin';
 import type {
   BulkActionComponent,
   DocumentActionComponent,
@@ -38,10 +38,13 @@ export const TranslateAction: DocumentActionComponent = ({ documentId, model }) 
 TranslateAction.position = ['panel', 'header'];
 export const TranslateBulkAction: BulkActionComponent = ({ documents, model }) => {
   const text = useText();
+  const layout = useDocumentLayout(model);
+  const i18n = layout.list.options.i18n;
+  const localized =
+    typeof i18n === 'object' && i18n !== null && 'localized' in i18n && i18n.localized === true;
   const permission = useRBAC([{ action: PERMISSIONS.bulkTranslate }]);
   const allowed =
     !permission.isLoading && !permission.error && permission.allowedActions.canBulkTranslate;
-  const resource = useResource(allowed ? '/translation-options' : null, optionsSchema);
   const documentIds = [
     ...new Set(
       documents
@@ -49,11 +52,7 @@ export const TranslateBulkAction: BulkActionComponent = ({ documents, model }) =
         .filter((id): id is string => typeof id === 'string' && id.length > 0)
     ),
   ];
-  if (
-    !allowed ||
-    !documentIds.length ||
-    !resource.result?.contentTypes.some((schema) => schema.uid === model && schema.localized)
-  )
+  if (!allowed || !documentIds.length || layout.isLoading || layout.error || !localized)
     return null;
   return {
     label: text('translation.bulk'),

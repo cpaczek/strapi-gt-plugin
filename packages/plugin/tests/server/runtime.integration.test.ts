@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startStrapiFixture } from './strapi-fixture';
 import { REQUEST_TIMEOUT_MS } from '../../shared/constants';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { summarizeJob } from '../../server/src/repository';
+import { formatUnknownError } from '../../shared/messages';
 
 vi.setConfig({ testTimeout: REQUEST_TIMEOUT_MS * 2, hookTimeout: REQUEST_TIMEOUT_MS * 4 });
 
@@ -101,12 +105,14 @@ const queue = async (documentId: string, force = false, actorId = app().actorId)
   if (!id) throw new Error('No job was enqueued');
   return id;
 };
-const finish = async (id: number) => {
+const finish = async (id: number, stages?: { stage: string; elapsedMs: number }[]) => {
   const { runtime } = app();
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const job = await runtime.repository.get(id);
     if (job && ['failed', 'conflict', 'succeeded'].includes(job.status)) return job;
+    const started = performance.now();
     await runtime.worker.execute();
+    if (job) stages?.push({ stage: job.stage, elapsedMs: performance.now() - started });
   }
   throw new Error('The worker did not reach a terminal stage');
 };
@@ -196,7 +202,55 @@ describe('real runtime conflict and permission controls', () => {
         locale: 'fr',
         data: { title: 'Human title', createdBy: app().actorId, updatedBy: app().actorId },
       });
-    expect((await finish(await queue(source.documentId))).status).toBe('succeeded');
+    const requestStart = app().mock.requests.length;
+    const stages: { stage: string; elapsedMs: number }[] = [];
+    const transport: { status?: number; error?: string; cause?: string; elapsedMs: number }[] = [];
+    const realFetch = globalThis.fetch;
+    const capture = vi.spyOn(globalThis, 'fetch').mockImplementation(async (...parameters) => {
+      const started = performance.now();
+      try {
+        const response = await realFetch(...parameters);
+        transport.push({ status: response.status, elapsedMs: performance.now() - started });
+        return response;
+      } catch (failure) {
+        transport.push({
+          error: formatUnknownError(failure),
+          cause:
+            failure instanceof Error && failure.cause instanceof Error
+              ? formatUnknownError(failure.cause)
+              : undefined,
+          elapsedMs: performance.now() - started,
+        });
+        throw failure;
+      }
+    });
+    const job = await queue(source.documentId)
+      .then((id) => finish(id, stages))
+      .finally(() => capture.mockRestore());
+    const evidenceDirectory = resolve(import.meta.dirname, '../../../../.work/server-stability');
+    await mkdir(evidenceDirectory, { recursive: true });
+    await writeFile(
+      resolve(evidenceDirectory, `human-edit-${Date.now()}-${process.pid}.json`),
+      JSON.stringify(
+        {
+          job: summarizeJob(job),
+          stages,
+          transport,
+          requests: app()
+            .mock.requests.slice(requestStart)
+            .map(({ method, path, projectId, apiVersion }) => ({
+              method,
+              path,
+              projectId,
+              apiVersion,
+            })),
+        },
+        null,
+        2
+      ),
+      { mode: 0o600 }
+    );
+    expect(job.status, JSON.stringify(job.error)).toBe('succeeded');
     expect(await target(source.documentId)).toMatchObject({
       title: 'Human title',
       summary: '[fr] Some context',
