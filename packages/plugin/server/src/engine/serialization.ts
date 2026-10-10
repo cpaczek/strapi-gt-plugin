@@ -354,6 +354,20 @@ const apply = (
           : sourceValue(field, source, input.components)
       );
     }
+    for (let depth = 1; depth < unit.path.length; depth += 1) {
+      const ancestor = unit.path.slice(0, depth);
+      if (empty(atPath(result.patch, ancestor))) {
+        const field = input.schema.attributes[top];
+        const source = own(input.source, top);
+        if (!field || source === undefined)
+          throw invalidTranslation('The component source is unavailable');
+        const template = sourceValue(field, source, input.components);
+        const branch = atPath(template, ancestor.slice(1));
+        if (branch === undefined)
+          throw invalidTranslation('The component path is unavailable in the source');
+        setPath(result.patch, ancestor, branch);
+      }
+    }
     setPath(result.patch, unit.path, value);
   };
   for (const unit of units.filter((entry) => entry.field.type !== 'uid')) {
