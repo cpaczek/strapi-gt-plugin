@@ -46,6 +46,7 @@
   "dependencies": {
     "@generaltranslation/api": "catalog:",
     "@generaltranslation/supported-locales": "catalog:",
+    "@sindresorhus/slugify": "catalog:",
     "generaltranslation": "catalog:",
     "mdast-util-from-markdown": "catalog:",
     "mdast-util-gfm": "catalog:",
