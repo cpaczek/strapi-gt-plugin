@@ -85,7 +85,7 @@ export const settingsSchema: z.ZodType<SettingsResponse> = z.object({
     automaticMode: z.enum(['off', 'save', 'publish']),
   }),
   hasApiKey: z.boolean(),
-  maskedApiKey: z.string(),
+  maskedApiKey: z.string().regex(/^\**$/),
   locales: z.array(locale),
   supportedLocales: z.array(z.string()),
   contentTypes: z.array(contentSchema),

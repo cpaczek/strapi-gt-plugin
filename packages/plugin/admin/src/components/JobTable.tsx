@@ -11,8 +11,51 @@ import {
   Typography,
 } from '@strapi/design-system';
 import { useIntl } from 'react-intl';
+import { useState } from 'react';
+import { Toggle } from './Controls';
 import type { JobSummary } from '../../../shared/contracts';
-import { useText } from '../i18n';
+import { useText, type MessageKey } from '../i18n';
+
+const RetryJob = ({
+  job,
+  busy,
+  onRetry,
+}: {
+  job: JobSummary;
+  busy: boolean;
+  onRetry: (id: number) => void;
+}) => {
+  const text = useText();
+  const [accepted, setAccepted] = useState(false);
+  const interrupted = job.error?.code === 'interrupted-request';
+  return (
+    <Flex direction="column" alignItems="stretch" gap={3}>
+      {interrupted && (
+        <Toggle
+          label={text('jobs.retryConsent', { id: job.id })}
+          checked={accepted}
+          disabled={busy}
+          onChange={setAccepted}
+        />
+      )}
+      <Button
+        variant="secondary"
+        disabled={busy || (interrupted && !accepted)}
+        onClick={() => onRetry(job.id)}
+      >
+        {text('jobs.retry', { id: job.id })}
+      </Button>
+    </Flex>
+  );
+};
+const columns: MessageKey[] = [
+  'jobs.id',
+  'jobs.document',
+  'common.target',
+  'common.status',
+  'jobs.details',
+  'common.actions',
+];
 
 export const JobTable = ({
   jobs,
@@ -36,28 +79,9 @@ export const JobTable = ({
       <Table colCount={6} rowCount={jobs.length + 1}>
         <Thead>
           <Tr>
-            {[
-              'jobs.id',
-              'jobs.document',
-              'common.target',
-              'common.status',
-              'jobs.details',
-              'common.actions',
-            ].map((label) => (
+            {columns.map((label) => (
               <Th key={label}>
-                <Typography fontWeight="bold">
-                  {label === 'jobs.id'
-                    ? text('jobs.id')
-                    : label === 'jobs.document'
-                      ? text('jobs.document')
-                      : label === 'common.target'
-                        ? text('common.target')
-                        : label === 'common.status'
-                          ? text('common.status')
-                          : label === 'jobs.details'
-                            ? text('jobs.details')
-                            : text('common.actions')}
-                </Typography>
+                <Typography fontWeight="bold">{text(label)}</Typography>
               </Th>
             ))}
           </Tr>
@@ -106,9 +130,12 @@ export const JobTable = ({
               </Td>
               <Td>
                 {onRetry && (job.status === 'failed' || job.status === 'conflict') && (
-                  <Button variant="secondary" disabled={busy} onClick={() => onRetry(job.id)}>
-                    {text('jobs.retry', { id: job.id })}
-                  </Button>
+                  <RetryJob
+                    key={`${job.id}:${job.updatedAt}`}
+                    job={job}
+                    busy={busy}
+                    onRetry={onRetry}
+                  />
                 )}
               </Td>
             </Tr>

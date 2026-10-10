@@ -113,5 +113,6 @@
   "media.status.source": "Shared source",
   "media.status.translated": "Translated",
   "media.status.manual": "Human edit",
-  "media.status.stale": "Source changed"
+  "media.status.stale": "Source changed",
+  "jobs.retryConsent": "I checked GT and accept retrying job {id}"
 }
