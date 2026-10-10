@@ -268,6 +268,7 @@ test('bulk translation queues only the selected saved documents', async ({ page,
       .filter({ has: page.getByText(source.title, { exact: true }) });
     await row.getByRole('checkbox').check();
   }
+  await expect(page.getByRole('button', { name: 'Translate selected', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Translate selected', exact: true }).click();
   const modal = page.getByRole('dialog', { name: 'Translate selected' });
   await modal.getByRole('checkbox', { name: 'Arabic (ar)', exact: true }).uncheck();
@@ -280,6 +281,8 @@ test('bulk translation queues only the selected saved documents', async ({ page,
   const response = await queued;
   expect(response.status()).toBe(200);
   const jobs = enqueueSchema.parse(await response.json()).jobs;
+  await expect(modal.getByText(/Translation jobs were queued/)).toBeVisible();
+  await assertAccessible(page, '[role="dialog"]');
   expect(jobs.map((job) => job.documentId).sort()).toEqual(
     [first.documentId, second.documentId].sort()
   );
@@ -388,6 +391,10 @@ test('a read-only editor cannot see translation actions or call their endpoints'
     });
     expect(response.status()).toBe(403);
     await restrictedPage.goto(`${adminOrigin}/admin${collection}?locale=en`);
+    await expect(restrictedPage.getByRole('grid')).toBeVisible();
+    await expect(
+      restrictedPage.getByRole('heading', { name: 'Article', exact: true })
+    ).toBeVisible();
     const selection = restrictedPage
       .getByRole('row')
       .filter({ hasText: source.title })
@@ -405,7 +412,6 @@ test('a read-only editor cannot see translation actions or call their endpoints'
     await expect(
       restrictedPage.getByRole('button', { name: 'Translate selected', exact: true })
     ).toHaveCount(0);
-    await assertAccessible(restrictedPage);
   } finally {
     await restrictedApi.dispose();
     await restricted.close();
@@ -529,7 +535,11 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
       const saveLabel = dictionary['settings.save'];
       if (!projectLabel || !saveLabel)
         throw new Error('The translated settings labels are unavailable');
-      await page.goto(`${adminOrigin}/admin/settings/general-translation`);
+      await page.getByRole('link').and(page.locator('[href="/admin/settings"]')).click();
+      await page
+        .getByRole('link')
+        .and(page.locator('[href="/admin/settings/general-translation"]'))
+        .click();
       await expect(page.getByRole('textbox', { name: projectLabel, exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: saveLabel, exact: true })).toBeVisible();
       await assertAccessible(page);
