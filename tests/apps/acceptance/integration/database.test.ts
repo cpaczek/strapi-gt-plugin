@@ -247,6 +247,18 @@ it('runs the durable translation with the initiating actor and records public GT
       .documents('api::article.article')
       .findOne({ documentId: source.documentId, locale: 'ar', status: 'published' })
   ).toBeNull();
+  const slug = z.object({ slug: z.string().min(1) }).parse(target).slug;
+  expect(slug).not.toBe('');
+  await app()
+    .documents('api::article.article')
+    .publish({ documentId: source.documentId, locale: 'ar' });
+  expect(
+    articleRecord.parse(
+      await app()
+        .documents('api::article.article')
+        .findOne({ documentId: source.documentId, locale: 'ar', status: 'published' })
+    ).title
+  ).toBe(`[ar] ${source.title}`);
   expect(runtime.mock?.requests.some((request) => request.path === '/v2/translate')).toBe(true);
   expect(JSON.stringify(runtime.mock?.requests)).not.toContain('editor@example.invalid');
 });
