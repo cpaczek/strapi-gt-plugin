@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "build": "turbo run build",
-    "test": "turbo run test",
+    "test": "pnpm test:tooling && turbo run test",
     "test:tooling": "vitest run --config vitest.tooling.config.ts",
     "typecheck": "turbo run typecheck",
-    "lint": "node scripts/check-defaults.mjs && node scripts/check-prose.mjs && turbo run lint",
+    "lint": "node scripts/check-defaults.mjs && node scripts/check-prose.mjs && oxlint scripts && turbo run lint",
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt --write .",
@@ -16,7 +16,11 @@
     "size": "pnpm --filter strapi-plugin-general-translation size",
     "changeset": "changeset",
     "version-packages": "changeset version",
-    "prepare": "lefthook install"
+    "prepare": "lefthook install",
+    "test:coverage": "pnpm --filter strapi-plugin-general-translation exec vitest run --coverage",
+    "test:integration": "pnpm --filter @gt/acceptance test:integration",
+    "test:e2e": "pnpm --filter @gt/acceptance test:e2e",
+    "test:packaging": "pnpm --filter @gt/acceptance test:packaging"
   },
   "devDependencies": {
     "@changesets/changelog-git": "catalog:",

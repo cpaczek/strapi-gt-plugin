@@ -1,0 +1,11 @@
+[mcp_servers.generaltranslation]
+url = "https://api.gtx.dev/mcp"
+
+[[hooks.PostToolUse]]
+matcher = "^(apply_patch|Edit|Write)$"
+
+[[hooks.PostToolUse.hooks]]
+type = "command"
+command = 'node "$(git rev-parse --show-toplevel)/scripts/format-changed.mjs"'
+timeout = 20
+statusMessage = "Formatting changed source files"

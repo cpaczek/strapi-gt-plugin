@@ -79,6 +79,15 @@ export interface SettingsResponse {
   components: Record<string, ContentSchema>;
   aiTranslationsEnabled: boolean;
 }
+export interface TranslationOptionsResponse {
+  configured: boolean;
+  sourceLocale: string;
+  targetLocales: { code: string; name: string }[];
+  contentTypes: Pick<ContentSchema, 'uid' | 'localized' | 'draftAndPublish'>[];
+  aiTranslationsEnabled: boolean;
+  createMissingLocales: boolean;
+  autoPublish: boolean;
+}
 export interface TranslationSegment {
   id: string;
   path: FieldPath;
