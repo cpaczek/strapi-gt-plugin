@@ -88,3 +88,6 @@ packageExtensions:
     dependencies:
       '@radix-ui/react-tooltip': '1.0.7'
       prismjs: '1.30.0'
+  '@strapi/strapi@5.57.0':
+    dependencies:
+      '@strapi/design-system': '2.2.4'
