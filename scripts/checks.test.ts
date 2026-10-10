@@ -8,25 +8,38 @@ describe('canonical defaults check', () => {
     expect(checkDefaultLiterals('const timeout = 30000;', canonical, 'request.ts')).toHaveLength(1);
   });
   it('rejects repeated base URLs', () => {
-    expect(checkDefaultLiterals("const endpoint = 'https://api.gtx.dev';", canonical, 'request.ts')).toHaveLength(1);
+    expect(
+      checkDefaultLiterals("const endpoint = 'https://api.gtx.dev';", canonical, 'request.ts')
+    ).toHaveLength(1);
   });
   it('allows importing canonical names', () => {
-    expect(checkDefaultLiterals('const timeout = REQUEST_TIMEOUT_MS;', canonical, 'request.ts')).toEqual([]);
+    expect(
+      checkDefaultLiterals('const timeout = REQUEST_TIMEOUT_MS;', canonical, 'request.ts')
+    ).toEqual([]);
   });
   it('does not mistake prose comments or longer literals for defaults', () => {
-    expect(checkDefaultLiterals('// 30000\nconst count = 300001;', canonical, 'request.ts')).toEqual([]);
+    expect(
+      checkDefaultLiterals('// 30000\nconst count = 300001;', canonical, 'request.ts')
+    ).toEqual([]);
   });
   it('checks values inside template literals', () => {
-    expect(checkDefaultLiterals('const endpoint = `https://api.gtx.dev`;', canonical, 'request.ts')).toHaveLength(1);
+    expect(
+      checkDefaultLiterals('const endpoint = `https://api.gtx.dev`;', canonical, 'request.ts')
+    ).toHaveLength(1);
   });
   it('does not allow a whole source file by filename alone', () => {
-    expect(checkDefaultLiterals('const timeout = 30000;', canonical, 'my-test-helper.ts')).toHaveLength(1);
+    expect(
+      checkDefaultLiterals('const timeout = 30000;', canonical, 'my-test-helper.ts')
+    ).toHaveLength(1);
   });
 });
 
 describe('prose policy', () => {
   it('rejects required punctuation controls', () => {
-    expect(checkProse('Use this \u2014 or that \u2013 with \u201ccurly\u201d quotes.', 'README.md').length).toBeGreaterThanOrEqual(4);
+    expect(
+      checkProse('Use this \u2014 or that \u2013 with \u201ccurly\u201d quotes.', 'README.md')
+        .length
+    ).toBeGreaterThanOrEqual(4);
   });
   it('rejects prohibited phrases case-insensitively', () => {
     expect(checkProse('A ROBUST solution lets you dive in.', 'README.md')).toHaveLength(2);
@@ -38,7 +51,9 @@ describe('prose policy', () => {
     expect(checkProse('The harnessed fixture is in tests.', 'README.md')).toEqual([]);
   });
   it('checks code comments and user-facing string literals', () => {
-    expect(checkProse("// A robust service\nconst label = 'Unlock translations';", 'screen.ts')).toHaveLength(2);
+    expect(
+      checkProse("// A robust service\nconst label = 'Unlock translations';", 'screen.ts')
+    ).toHaveLength(2);
   });
   it('does not lint identifier spellings', () => {
     expect(checkProse('const streamline = 1;', 'screen.ts')).toEqual([]);

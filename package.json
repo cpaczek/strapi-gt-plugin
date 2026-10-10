@@ -3,10 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@12.11.2",
-  "engines": {
-    "node": ">=22.12.0 <=26.x.x"
-  },
   "scripts": {
     "build": "turbo run build",
     "test": "turbo run test",
@@ -23,15 +19,20 @@
     "prepare": "lefthook install"
   },
   "devDependencies": {
+    "@changesets/changelog-git": "catalog:",
+    "@changesets/cli": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "lefthook": "catalog:",
+    "oxc-parser": "0.153.0",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
-    "oxlint": "catalog:",
-    "oxfmt": "catalog:",
-    "lefthook": "catalog:",
-    "vitest": "catalog:",
-    "@vitest/coverage-v8": "catalog:",
-    "@changesets/cli": "catalog:",
-    "@changesets/changelog-git": "catalog:",
-    "@types/node": "catalog:"
-  }
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.12.0 <=26.x.x"
+  },
+  "packageManager": "pnpm@12.11.2"
 }

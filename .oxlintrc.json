@@ -1,9 +1,5 @@
 {
-  "plugins": [
-    "typescript",
-    "react",
-    "jsx-a11y"
-  ],
+  "plugins": ["typescript", "react", "jsx-a11y"],
   "categories": {
     "correctness": "error"
   },

@@ -3,14 +3,14 @@
 This workspace contains a community Strapi translation plugin and local examples.
 Read the nearest nested AGENTS.md before changing files, including in Claude Code.
 
-| Path | Purpose |
-| --- | --- |
+| Path            | Purpose                                                       |
+| --------------- | ------------------------------------------------------------- |
 | packages/plugin | Strapi server, translation engine, shared contracts, admin UI |
-| playground | Seeded Strapi example |
-| playground-next | Next.js reader for published localized articles |
-| tests/apps | Fresh-install and database-matrix applications |
-| scripts | Repository checks and contributor tools |
-| docs | Installation, operations, and writing guidance |
+| playground      | Seeded Strapi example                                         |
+| playground-next | Next.js reader for published localized articles               |
+| tests/apps      | Fresh-install and database-matrix applications                |
+| scripts         | Repository checks and contributor tools                       |
+| docs            | Installation, operations, and writing guidance                |
 
 ## Commands
 

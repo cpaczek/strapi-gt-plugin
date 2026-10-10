@@ -2,19 +2,19 @@
   "name": "strapi-plugin-general-translation",
   "version": "0.1.0",
   "description": "Community plugin for translating localized Strapi content with General Translation.",
+  "keywords": [
+    "i18n",
+    "strapi",
+    "strapi-plugin",
+    "translation"
+  ],
   "license": "MIT",
-  "type": "commonjs",
   "files": [
     "dist",
     "README.md",
     "LICENSE"
   ],
-  "keywords": [
-    "strapi",
-    "strapi-plugin",
-    "translation",
-    "i18n"
-  ],
+  "type": "commonjs",
   "exports": {
     "./package.json": "./package.json",
     "./strapi-admin": {
@@ -32,15 +32,6 @@
       "default": "./dist/server/index.js"
     }
   },
-  "strapi": {
-    "kind": "plugin",
-    "name": "general-translation",
-    "displayName": "General Translation",
-    "description": "Translate localized content with your General Translation account."
-  },
-  "engines": {
-    "node": ">=22.12.0 <=26.x.x"
-  },
   "scripts": {
     "build": "strapi-plugin build --minify",
     "verify": "strapi-plugin verify",
@@ -52,56 +43,65 @@
     "size": "size-limit"
   },
   "dependencies": {
-    "generaltranslation": "catalog:",
     "@generaltranslation/api": "catalog:",
     "@generaltranslation/supported-locales": "catalog:",
+    "generaltranslation": "catalog:",
     "zod": "catalog:"
   },
+  "devDependencies": {
+    "@size-limit/file": "catalog:",
+    "@strapi/admin": "catalog:",
+    "@strapi/content-manager": "catalog:",
+    "@strapi/design-system": "catalog:",
+    "@strapi/i18n": "catalog:",
+    "@strapi/icons": "catalog:",
+    "@strapi/sdk-plugin": "catalog:",
+    "@strapi/strapi": "catalog:",
+    "@strapi/types": "catalog:",
+    "@strapi/typescript-utils": "catalog:",
+    "@strapi/utils": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
+    "@types/koa": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "jsdom": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-intl": "catalog:",
+    "react-router-dom": "catalog:",
+    "size-limit": "catalog:",
+    "styled-components": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
   "peerDependencies": {
-    "@strapi/strapi": "~5.57.0",
     "@strapi/design-system": "^2.2.4",
     "@strapi/icons": "^2.2.4",
+    "@strapi/strapi": "~5.57.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-intl": "^6.8.9",
     "react-router-dom": "^6.30.6",
     "styled-components": "^6.5.3"
   },
-  "devDependencies": {
-    "@strapi/strapi": "catalog:",
-    "@strapi/admin": "catalog:",
-    "@strapi/content-manager": "catalog:",
-    "@strapi/types": "catalog:",
-    "@strapi/i18n": "catalog:",
-    "@strapi/sdk-plugin": "catalog:",
-    "@strapi/design-system": "catalog:",
-    "@strapi/icons": "catalog:",
-    "@strapi/typescript-utils": "catalog:",
-    "@strapi/utils": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "react-intl": "catalog:",
-    "react-router-dom": "catalog:",
-    "styled-components": "catalog:",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "@types/node": "catalog:",
-    "@types/koa": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:",
-    "@vitest/coverage-v8": "catalog:",
-    "@testing-library/react": "catalog:",
-    "@testing-library/user-event": "catalog:",
-    "jsdom": "catalog:",
-    "oxlint": "catalog:",
-    "oxfmt": "catalog:",
-    "size-limit": "catalog:",
-    "@size-limit/file": "catalog:"
-  },
   "size-limit": [
     {
       "path": "dist/admin/*.mjs",
       "limit": "65 kB"
     }
-  ]
+  ],
+  "engines": {
+    "node": ">=22.12.0 <=26.x.x"
+  },
+  "strapi": {
+    "kind": "plugin",
+    "name": "general-translation",
+    "displayName": "General Translation",
+    "description": "Translate localized content with your General Translation account."
+  }
 }
