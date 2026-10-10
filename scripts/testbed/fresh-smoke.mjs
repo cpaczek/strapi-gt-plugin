@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { realpath } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { setTimeout as pollDelay } from 'node:timers/promises';
 
 const require = createRequire(import.meta.url);
 const { compileStrapi, createStrapi } = require('@strapi/strapi');
@@ -9,6 +13,7 @@ const pluginPath = await realpath(
 );
 assert.ok(!pluginPath.includes('/packages/plugin/'), 'Fresh install resolved the workspace source');
 const strapi = await createStrapi(await compileStrapi()).load();
+const translated = { documentId: '', title: '' };
 try {
   assert.ok(strapi.plugin('general-translation'));
   const articles = await strapi
@@ -19,8 +24,71 @@ try {
     .documents('api::article.article')
     .findMany({ locale: 'en', status: 'draft' });
   assert.equal(drafts.length, 4);
+  const translation = strapi.plugin('general-translation').service('translation');
+  await translation.worker.stop();
+  const role = await strapi.db
+    .query('admin::role')
+    .findOne({ where: { code: 'strapi-super-admin' } });
+  assert.equal(typeof role?.id, 'number');
+  const actor = await strapi.db.query('admin::user').create({
+    data: {
+      firstname: 'Packed',
+      lastname: 'Test editor',
+      email: `${randomBytes(8).toString('hex')}@example.invalid`,
+      isActive: true,
+      roles: [role.id],
+    },
+  });
+  const source = articles[0];
+  assert.ok(source);
+  const queued = await translation.enqueue(
+    {
+      contentType: 'api::article.article',
+      documentIds: [source.documentId],
+      targetLocales: ['fr'],
+      force: false,
+    },
+    actor.id,
+    'translate',
+    'published'
+  );
+  assert.equal(queued.jobs.length, 1);
+  const deadline = Date.now() + 60000;
+  const completion = { succeeded: false };
+  while (Date.now() < deadline) {
+    await translation.worker.execute();
+    const job = await translation.repository.get(queued.jobs[0].id);
+    assert.ok(job);
+    assert.ok(!['failed', 'conflict'].includes(job.status), job.error?.text);
+    if (job.status === 'succeeded') {
+      completion.succeeded = true;
+      break;
+    }
+    await pollDelay(20);
+  }
+  assert.ok(completion.succeeded, 'Packed translation did not finish');
+  const target = await strapi.documents('api::article.article').findOne({
+    documentId: source.documentId,
+    locale: 'fr',
+    status: 'draft',
+    populate: ['createdBy', 'updatedBy'],
+  });
+  assert.equal(target?.title, `[fr] ${source.title}`);
+  assert.equal(target?.createdBy?.id, actor.id);
+  assert.equal(target?.updatedBy?.id, actor.id);
+  assert.equal(
+    await strapi
+      .documents('api::article.article')
+      .findOne({ documentId: source.documentId, locale: 'fr', status: 'published' }),
+    null
+  );
+  await strapi
+    .documents('api::article.article')
+    .publish({ documentId: source.documentId, locale: 'fr' });
+  translated.documentId = source.documentId;
+  translated.title = target.title;
   process.stdout.write(
-    'Packed plugin loaded in the official scaffold; publication controls passed.\n'
+    'Packed plugin translated a French draft with editor attribution and then published it.\n'
   );
 } finally {
   await strapi.destroy();
@@ -29,7 +97,6 @@ try {
 const { spawn } = await import('node:child_process');
 const { once } = await import('node:events');
 const { createServer } = await import('node:net');
-const { setTimeout: pollDelay } = await import('node:timers/promises');
 const reservation = createServer();
 reservation.listen(0, '127.0.0.1');
 await once(reservation, 'listening');
@@ -71,7 +138,23 @@ try {
   assert.ok(payload && Array.isArray(payload.data));
   assert.equal(payload.data.length, 3);
   assert.ok(payload.data.every((article) => article.publishedAt));
-  process.stdout.write('Consumer pnpm start served the three published articles over HTTP.\n');
+  const localizedResponse = await fetch(
+    `http://127.0.0.1:${port}/api/articles/${translated.documentId}?status=published&locale=fr`
+  );
+  assert.equal(localizedResponse.status, 200);
+  assert.equal((await localizedResponse.json()).data.title, translated.title);
+  const browserHelper = process.env.TESTBED_BROWSER_HELPER;
+  assert.ok(browserHelper, 'Acceptance browser helper was not supplied');
+  const browserResult = await promisify(execFile)(
+    process.execPath,
+    [browserHelper, `http://127.0.0.1:${port}`],
+    { cwd: process.cwd(), timeout: 60000, maxBuffer: 1000000 }
+  );
+  process.stdout.write(browserResult.stdout);
+  process.stderr.write(browserResult.stderr);
+  process.stdout.write(
+    'Consumer pnpm start served published source and translated content over HTTP.\n'
+  );
 } finally {
   if (server.exitCode === null && server.pid) {
     process.kill(-server.pid, 'SIGTERM');
