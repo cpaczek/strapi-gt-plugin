@@ -70,22 +70,18 @@ afterEach(async () => {
 });
 const freshSource = async () => {
   const { strapi, actorId, assetId } = app();
-  return z
-    .object({ documentId: z.string() })
-    .parse(
-      await strapi
-        .documents('api::article.article')
-        .create({
-          locale: 'en',
-          data: {
-            title: 'A new article',
-            summary: 'Some context',
-            image: assetId,
-            createdBy: actorId,
-            updatedBy: actorId,
-          },
-        })
-    );
+  return z.object({ documentId: z.string() }).parse(
+    await strapi.documents('api::article.article').create({
+      locale: 'en',
+      data: {
+        title: 'A new article',
+        summary: 'Some context',
+        image: assetId,
+        createdBy: actorId,
+        updatedBy: actorId,
+      },
+    })
+  );
 };
 const queue = async (documentId: string, force = false, actorId = app().actorId) => {
   const result = await app().runtime.enqueue(
@@ -438,4 +434,310 @@ it('rejects a changed schema snapshot before applying saved translations', async
     if (original === undefined) delete attribute.private;
     else attribute.private = original;
   }
+});
+
+import { PERMISSIONS } from '../../shared/constants';
+let roleSequence = 0;
+const limitedActor = async (
+  options: {
+    plugin?: boolean;
+    read?: string[];
+    create?: string[];
+    update?: string[];
+    readLocales?: string[];
+    createLocales?: string[];
+    publish?: boolean;
+  } = {}
+) => {
+  roleSequence += 1;
+  const strapi = app().strapi;
+  const role = z
+    .object({ id: z.number() })
+    .parse(
+      await strapi.db
+        .query('admin::role')
+        .create({
+          data: {
+            name: `Server role ${roleSequence}`,
+            code: `server-role-${roleSequence}`,
+            description: 'Fixture role',
+          },
+        })
+    );
+  if (options.plugin !== false)
+    await strapi.db
+      .query('admin::permission')
+      .create({
+        data: {
+          role: role.id,
+          action: PERMISSIONS.translate,
+          subject: null,
+          properties: {},
+          conditions: [],
+        },
+      });
+  for (const action of ['read', 'create', 'update'] as const) {
+    const fields = options[action] ?? ['title'];
+    const locales =
+      action === 'read' ? (options.readLocales ?? ['en', 'fr']) : (options.createLocales ?? ['fr']);
+    await strapi.db
+      .query('admin::permission')
+      .create({
+        data: {
+          role: role.id,
+          action: `plugin::content-manager.explorer.${action}`,
+          subject: 'api::article.article',
+          properties: { fields, locales },
+          conditions: [],
+        },
+      });
+  }
+  if (options.publish)
+    await strapi.db
+      .query('admin::permission')
+      .create({
+        data: {
+          role: role.id,
+          action: 'plugin::content-manager.explorer.publish',
+          subject: 'api::article.article',
+          properties: { locales: ['fr'] },
+          conditions: [],
+        },
+      });
+  const actor = z
+    .object({ id: z.number() })
+    .parse(
+      await strapi.db
+        .query('admin::user')
+        .create({
+          data: {
+            firstname: 'Limited',
+            lastname: 'Editor',
+            email: `limited-${roleSequence}@example.invalid`,
+            isActive: true,
+            roles: [role.id],
+          },
+        })
+    );
+  return actor.id;
+};
+const titleOnly = () => ({
+  ...app().settings,
+  contentTypes: {
+    'api::article.article': {
+      mediaMetadata: false,
+      fields: {
+        title: { translate: true },
+        summary: { translate: false },
+        image: { translate: false },
+        card: { translate: false },
+        cards: { translate: false },
+        sections: { translate: false },
+      },
+    },
+  },
+});
+
+describe('actual Strapi RBAC decisions', () => {
+  it('allows a translator with only the selected field and locale rights', async () => {
+    await app().runtime.saveSettings(titleOnly());
+    const source = await freshSource();
+    const actorId = await limitedActor({ readLocales: ['en'], createLocales: ['fr'] });
+    const id = await queue(source.documentId, false, actorId);
+    expect((await finish(id)).status).toBe('succeeded');
+    expect(
+      await app()
+        .strapi.documents('api::article.article')
+        .findOne({
+          documentId: source.documentId,
+          locale: 'fr',
+          status: 'draft',
+          populate: { createdBy: { fields: ['id'] } },
+        })
+    ).toMatchObject({ title: '[fr] A new article', createdBy: { id: actorId } });
+  });
+  it('refuses content rights without the plugin translation action', async () => {
+    await app().runtime.saveSettings(titleOnly());
+    const source = await freshSource();
+    const actorId = await limitedActor({ plugin: false });
+    await expect(queue(source.documentId, false, actorId)).rejects.toThrow();
+    await expect(app().runtime.history(actorId, { page: 1 })).rejects.toThrow();
+  });
+  it('refuses source field reads outside the actor allowed fields', async () => {
+    await app().runtime.saveSettings(titleOnly());
+    const source = await freshSource();
+    const actorId = await limitedActor({ read: ['summary'] });
+    await expect(queue(source.documentId, false, actorId)).rejects.toThrow();
+  });
+  it('refuses the source locale outside the actor locale grant', async () => {
+    await app().runtime.saveSettings(titleOnly());
+    const source = await freshSource();
+    const actorId = await limitedActor({ readLocales: ['fr'] });
+    await expect(queue(source.documentId, false, actorId)).rejects.toThrow();
+  });
+  it('refuses target creation outside the actor locale grant', async () => {
+    await app().runtime.saveSettings(titleOnly());
+    const source = await freshSource();
+    const actorId = await limitedActor({ createLocales: ['ar'] });
+    await expect(queue(source.documentId, false, actorId)).rejects.toThrow();
+  });
+  it('refuses automatic publication without publish permission', async () => {
+    await app().runtime.saveSettings({ ...titleOnly(), autoPublish: true });
+    const source = await freshSource();
+    const actorId = await limitedActor();
+    await expect(queue(source.documentId, false, actorId)).rejects.toThrow();
+  });
+  it('refuses media editing when the actor cannot read that field', async () => {
+    const source = await freshSource();
+    await finish(await queue(source.documentId));
+    const actorId = await limitedActor();
+    await expect(
+      app().runtime.mediaDocument('api::article.article', source.documentId, 'fr', 'draft', actorId)
+    ).rejects.toThrow();
+  });
+});
+
+it('translates nested components and dynamic zones using real permission subjects', async () => {
+  const { strapi, actorId, assetId } = app();
+  const source = z.object({ documentId: z.string() }).parse(
+    await strapi.documents('api::article.article').create({
+      locale: 'en',
+      data: {
+        title: 'Nested',
+        card: { title: 'Single card', count: 5, image: assetId },
+        cards: [
+          { title: 'First card', count: 2 },
+          { title: 'Second card', count: 3 },
+        ],
+        sections: [{ __component: 'editorial.card', title: 'Zone card', count: 1, image: assetId }],
+        createdBy: actorId,
+        updatedBy: actorId,
+      },
+    })
+  );
+  const id = await queue(source.documentId);
+  expect(await finish(id)).toMatchObject({ status: 'succeeded' });
+  const translated: unknown = await strapi
+    .documents('api::article.article')
+    .findOne({
+      documentId: source.documentId,
+      locale: 'fr',
+      status: 'draft',
+      populate: { card: true, cards: true, sections: true },
+    });
+  expect(translated).toMatchObject({
+    card: { title: '[fr] Single card', count: 5 },
+    cards: [{ title: '[fr] First card' }, { title: '[fr] Second card' }],
+    sections: [{ __component: 'editorial.card', title: '[fr] Zone card' }],
+  });
+});
+it('applies an already committed job idempotently after completion recovery', async () => {
+  const source = await freshSource();
+  const id = await queue(source.documentId);
+  await finish(id);
+  await app()
+    .strapi.documents('api::article.article')
+    .update({ documentId: source.documentId, locale: 'fr', data: { title: 'Later human edit' } });
+  await app()
+    .strapi.db.query('plugin::general-translation.job')
+    .update({
+      where: { id },
+      data: { status: 'queued', nextRunAt: new Date(0), leaseOwner: null, leaseUntil: null },
+    });
+  expect((await finish(id)).status).toBe('succeeded');
+  expect(await target(source.documentId)).toMatchObject({ title: 'Later human edit' });
+});
+it('keeps no-op source checks local without calling GT again', async () => {
+  const source = await freshSource();
+  await finish(await queue(source.documentId));
+  const requests = app().mock.requests.length;
+  expect((await finish(await queue(source.documentId))).status).toBe('succeeded');
+  expect(app().mock.requests.length).toBe(requests);
+});
+it('writes translations immediately for content types without drafts', async () => {
+  const { strapi, actorId } = app();
+  const source = z
+    .object({ documentId: z.string() })
+    .parse(
+      await strapi
+        .documents('api::note.note')
+        .create({
+          locale: 'en',
+          data: { title: 'Live note', createdBy: actorId, updatedBy: actorId },
+        })
+    );
+  await app().runtime.saveSettings({
+    ...app().settings,
+    contentTypes: {
+      ...app().settings.contentTypes,
+      'api::note.note': { fields: { title: { translate: true } }, mediaMetadata: false },
+    },
+  });
+  const result = await app().runtime.enqueue(
+    {
+      contentType: 'api::note.note',
+      documentIds: [source.documentId],
+      targetLocales: ['fr'],
+      force: false,
+    },
+    actorId,
+    'translate'
+  );
+  const id = result.jobs[0]?.id;
+  if (!id) throw new Error('No note job');
+  expect((await finish(id)).status).toBe('succeeded');
+  expect(
+    await strapi
+      .documents('api::note.note')
+      .findOne({ documentId: source.documentId, locale: 'fr', status: 'published' })
+  ).toMatchObject({ title: '[fr] Live note' });
+});
+it('returns typed controller responses for translate, history, media, and retry', async () => {
+  const controllers = plugin.controllers.translation({ strapi: app().strapi });
+  const source = await freshSource();
+  const translated = context({
+    contentType: 'api::article.article',
+    documentIds: [source.documentId],
+    targetLocales: ['fr'],
+    force: false,
+  });
+  await controllers.translate(translated);
+  const queued = z.object({ jobs: z.array(z.object({ id: z.number() })) }).parse(translated.body);
+  const id = queued.jobs[0]?.id;
+  if (!id) throw new Error('No controller job');
+  await finish(id);
+  const history = context();
+  history.query = {
+    contentType: 'api::article.article',
+    documentId: source.documentId,
+    latestPerLocale: 'true',
+  };
+  await controllers.history(history);
+  expect(history.body).toMatchObject({ total: 1 });
+  const mediaContext = context();
+  mediaContext.query = {
+    contentType: 'api::article.article',
+    documentId: source.documentId,
+    locale: 'fr',
+    status: 'draft',
+  };
+  await controllers.media(mediaContext);
+  expect(mediaContext.body).toMatchObject({ draftAndPublish: true });
+  const edited = context({
+    contentType: 'api::article.article',
+    documentId: source.documentId,
+    locale: 'fr',
+    path: ['image'],
+    property: 'caption',
+    value: 'Manual caption',
+    reset: false,
+  });
+  await controllers.editMedia(edited);
+  expect(edited.body).toMatchObject({
+    items: expect.arrayContaining([expect.objectContaining({ value: 'Manual caption' })]),
+  });
+  const retry = context();
+  retry.params = { id: 'not-an-id' };
+  await controllers.retry(retry);
+  expect(retry.status).toBe(400);
 });
