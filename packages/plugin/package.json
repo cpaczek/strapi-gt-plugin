@@ -46,6 +46,7 @@
     "@generaltranslation/api": "catalog:",
     "@generaltranslation/supported-locales": "catalog:",
     "generaltranslation": "catalog:",
+    "mdast-util-from-markdown": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

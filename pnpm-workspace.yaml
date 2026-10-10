@@ -8,6 +8,10 @@ enableGlobalVirtualStore: true
 hoist: false
 
 catalog:
+  'mdast-util-from-markdown': '2.1.0'
+  '@strapi/plugin-users-permissions': '5.57.0'
+  'tsx': '4.23.15'
+  'server-only': '0.0.1'
   '@axe-core/playwright': '4.13.0'
   '@changesets/changelog-git': '1.0.0'
   '@changesets/cli': '3.0.3'
@@ -69,3 +73,10 @@ minimumReleaseAgeExclude:
   - '@generaltranslation/api@0.5.4'
   - '@generaltranslation/supported-locales@2.1.42'
   - generaltranslation@9.5.6
+
+catalogs:
+  next:
+    react: 19.3.0
+    react-dom: 19.3.0
+    '@types/react': 19.3.0
+    '@types/react-dom': 19.3.0
