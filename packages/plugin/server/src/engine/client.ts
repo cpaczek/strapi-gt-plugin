@@ -32,6 +32,7 @@ import type {
   TranslationSegment,
 } from '../../../shared/contracts';
 import { messages } from '../../../shared/messages';
+import { hasTranslationContext } from './context';
 import { GtRequestError, invalidTranslation } from './errors';
 import { hashValue } from './hash';
 import { resolveGtLocale } from './locales';
@@ -411,7 +412,7 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
     translate: translateSegments,
     async upload(request, fileName) {
       validateRequest(request);
-      if (request.segments.some((segment) => segment.context !== undefined))
+      if (request.segments.some((segment) => hasTranslationContext(segment.context)))
         throw invalidTranslation(
           'Field context requires runtime translation until GT documents contextual file uploads'
         );
