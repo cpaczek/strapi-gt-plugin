@@ -47,6 +47,8 @@
     "@generaltranslation/supported-locales": "catalog:",
     "generaltranslation": "catalog:",
     "mdast-util-from-markdown": "catalog:",
+    "mdast-util-gfm": "catalog:",
+    "micromark-extension-gfm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
