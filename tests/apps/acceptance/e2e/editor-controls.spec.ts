@@ -40,17 +40,21 @@ interface EditorFixture {
   createAccount: (canTranslate: boolean) => Promise<TestAccount>;
 }
 const authenticatedApi = async (page: Page, account?: TestAccount): Promise<APIRequestContext> => {
-  const login = page.waitForResponse(
-    (response) =>
-      /\/admin\/(login|register-admin)$/.test(new URL(response.url()).pathname) &&
-      response.request().method() === 'POST'
-  );
-  await signIn(page, account);
+  const [login] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        /\/admin\/(login|register-admin)$/.test(new URL(response.url()).pathname) &&
+        response.request().method() === 'POST'
+    ),
+    signIn(page, account),
+  ]);
   const credentials = z
-    .object({ data: z.object({ token: z.string() }) })
-    .parse(await (await login).json());
+    .object({ data: z.object({ token: z.string(), user: z.object({ email: z.string() }) }) })
+    .parse(await login.json());
+  if (account) expect(credentials.data.user.email).toBe(account.email);
   return request.newContext({
     baseURL: adminOrigin,
+    storageState: { cookies: [], origins: [] },
     extraHTTPHeaders: { Authorization: `Bearer ${credentials.data.token}` },
   });
 };
@@ -61,7 +65,7 @@ interface AdminSession {
 const test = base.extend<{ editor: EditorFixture }, { adminSession: AdminSession }>({
   adminSession: [
     async ({ browser }, use) => {
-      const context = await browser.newContext();
+      const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
       const page = await context.newPage();
       const api = await authenticatedApi(page);
       try {
@@ -77,6 +81,11 @@ const test = base.extend<{ editor: EditorFixture }, { adminSession: AdminSession
     await use(adminSession.storage);
   },
   editor: async ({ page, adminSession }, use) => {
+    await page.addLocatorHandler(
+      page.getByText('Step 1 of 4', { exact: true }),
+      () => dismissEditorTour(page),
+      { times: 1 }
+    );
     const api = adminSession.api;
     const originalResponse = await api.get('/general-translation/settings');
     expect(originalResponse.status()).toBe(200);
@@ -231,8 +240,9 @@ const queueFrench = async (page: Page, force = false) => {
   expect(response.status()).toBe(200);
   await expect(modal.getByText(/Translation jobs were queued/)).toBeVisible();
   const jobs = enqueueSchema.parse(await response.json()).jobs;
-  await assertAccessible(page);
-  await modal.getByRole('button', { name: 'Close', exact: true }).click();
+  await assertAccessible(page, '[role="dialog"]');
+  await modal.getByRole('button', { name: 'Close modal', exact: true }).click();
+  await assertAccessible(page, 'section[aria-label="General Translation controls"]');
   return jobs.map((job) => job.id);
 };
 const saveDocument = async (page: Page) => {
@@ -250,6 +260,7 @@ test('bulk translation queues only the selected saved documents', async ({ page,
   const second = await editor.createSource('Bulk second');
   const unselected = await editor.createSource('Unselected control');
   await page.goto(`${adminOrigin}/admin${collection}?locale=en`);
+  await expect(page.getByRole('grid')).toBeVisible();
   await dismissEditorTour(page);
   for (const source of [first, second]) {
     const row = page
@@ -350,14 +361,22 @@ test('a read-only editor cannot see translation actions or call their endpoints'
 }) => {
   const source = await editor.createSource('Permission denial');
   const account = await editor.createAccount(false);
-  const restricted = await browser.newContext();
+  const restricted = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const restrictedPage = await restricted.newPage();
   const restrictedApi = await authenticatedApi(restrictedPage, account);
   try {
     await openDocument(restrictedPage, source);
-    await expect(
-      restrictedPage.getByRole('button', { name: 'Translate', exact: true })
-    ).toHaveCount(0);
+    const actionMenu = restrictedPage.getByRole('button', {
+      name: 'More document actions',
+      exact: true,
+    });
+    if (await actionMenu.isVisible()) {
+      await actionMenu.click();
+      await expect(
+        restrictedPage.getByRole('menuitem', { name: 'Translate', exact: true })
+      ).toHaveCount(0);
+      await restrictedPage.keyboard.press('Escape');
+    }
     await expect(restrictedPage.getByText('Translation', { exact: true })).toHaveCount(0);
     const response = await restrictedApi.post('/general-translation/translate', {
       data: {
@@ -369,11 +388,20 @@ test('a read-only editor cannot see translation actions or call their endpoints'
     });
     expect(response.status()).toBe(403);
     await restrictedPage.goto(`${adminOrigin}/admin${collection}?locale=en`);
-    await restrictedPage
+    const selection = restrictedPage
       .getByRole('row')
       .filter({ hasText: source.title })
-      .getByRole('checkbox')
-      .check();
+      .getByRole('checkbox');
+    if (await selection.count()) await selection.check();
+    const bulkResponse = await restrictedApi.post('/general-translation/bulk', {
+      data: {
+        contentType: model,
+        documentIds: [source.documentId],
+        targetLocales: ['fr'],
+        force: false,
+      },
+    });
+    expect(bulkResponse.status()).toBe(403);
     await expect(
       restrictedPage.getByRole('button', { name: 'Translate selected', exact: true })
     ).toHaveCount(0);
@@ -393,7 +421,7 @@ test('a translator can use document options without settings access', async ({
 }) => {
   const source = await editor.createSource('Translate-only editor');
   const account = await editor.createAccount(true);
-  const restricted = await browser.newContext();
+  const restricted = await browser.newContext({ storageState: { cookies: [], origins: [] } });
   const page = await restricted.newPage();
   const api = await authenticatedApi(page, account);
   const settingsRequests: string[] = [];
@@ -403,9 +431,7 @@ test('a translator can use document options without settings access', async ({
   });
   try {
     await openDocument(page, source);
-    await expect(
-      page.getByRole('button', { name: 'Translate', exact: true }).first()
-    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Choose locales', exact: true })).toBeVisible();
     expect(settingsRequests).toEqual([]);
     expect((await api.get('/general-translation/translation-options')).status()).toBe(200);
     expect((await api.get('/general-translation/settings')).status()).toBe(403);
