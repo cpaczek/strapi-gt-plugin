@@ -17,6 +17,8 @@ import {
   adminOrigin,
   configureTranslation,
   openDocument,
+  openTranslation,
+  dismissEditorTour,
   openSettings,
   signIn,
   type TestAccount,
@@ -201,7 +203,7 @@ const waitForJobs = async (api: APIRequestContext, documentIds: string[], jobIds
     .toBe(true);
 };
 const queueFrench = async (page: Page, force = false) => {
-  await page.getByRole('button', { name: 'Translate', exact: true }).first().click();
+  await openTranslation(page);
   const modal = page.getByRole('dialog', { name: 'Translate content' });
   await modal.getByRole('checkbox', { name: 'French (fr)', exact: true }).check();
   await modal.getByRole('checkbox', { name: 'Arabic (ar)', exact: true }).uncheck();
@@ -248,6 +250,7 @@ test('bulk translation queues only the selected saved documents', async ({ page,
   const second = await editor.createSource('Bulk second');
   const unselected = await editor.createSource('Unselected control');
   await page.goto(`${adminOrigin}/admin${collection}?locale=en`);
+  await dismissEditorTour(page);
   for (const source of [first, second]) {
     const row = page
       .getByRole('row')
