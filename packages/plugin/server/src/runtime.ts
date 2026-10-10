@@ -54,7 +54,7 @@ const mutationFields = (
     const field = schema.attributes[name];
     if (!field) return [];
     const path = prefix ? `${prefix}.${name}` : name;
-    if (field.type !== 'component' && field.type !== 'dynamiczone') return [path];
+    if (field.type !== 'component') return [path];
     const entries = Array.isArray(value) ? value : [value];
     return entries.flatMap((entry) => {
       if (!objectRecord(entry)) return [path];
@@ -388,7 +388,12 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
     },
     async history(
       actorId: number,
-      filters: { page: number; contentType?: string; documentId?: string }
+      filters: {
+        page: number;
+        contentType?: string;
+        documentId?: string;
+        latestPerLocale?: boolean;
+      }
     ) {
       const actor = await loadActorPermissions(strapi, actorId);
       if (
@@ -397,7 +402,20 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
         !actor.plugin('readSettings')
       )
         return denied();
-      const result = await repository.list(actorId, filters);
+      if (filters.latestPerLocale && (!filters.contentType || !filters.documentId))
+        return fail('Choose a content type and document for per-locale history');
+      const latest =
+        filters.latestPerLocale && filters.contentType && filters.documentId
+          ? await repository.latest(
+              actorId,
+              filters.contentType,
+              filters.documentId,
+              (await savedSettings()).targetLocales
+            )
+          : null;
+      const result = latest
+        ? { jobs: latest, total: latest.length }
+        : await repository.list(actorId, filters);
       const visible: StoredJob[] = [];
       for (const job of result.jobs) {
         const { schema, components } = schemaFor(job.contentType, job.settings);

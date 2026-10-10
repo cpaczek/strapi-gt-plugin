@@ -28,6 +28,10 @@ const querySchema = z
     contentType: z.string().optional(),
     documentId: z.string().optional(),
     page: z.coerce.number().int().positive().default(1),
+    latestPerLocale: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
   })
   .strict();
 const mediaQuery = z

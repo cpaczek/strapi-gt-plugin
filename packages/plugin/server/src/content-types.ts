@@ -19,6 +19,7 @@ export const contentTypes = {
         actorId: { type: 'integer' },
         contentType: { type: 'string', required: true },
         entryDocumentId: { type: 'string', required: true },
+        targetLocale: { type: 'string', required: true },
         payload: { type: 'json', required: true },
       },
     },
@@ -31,7 +32,7 @@ export const contentTypes = {
       options: { draftAndPublish: false },
       pluginOptions: hidden,
       attributes: {
-        key: { type: 'string', required: true, unique: true },
+        key: { type: 'string', required: true, unique: true, column: { unique: true } },
         owner: { type: 'string' },
         expiresAt: { type: 'datetime' },
       },
@@ -45,7 +46,7 @@ export const contentTypes = {
       options: { draftAndPublish: false },
       pluginOptions: hidden,
       attributes: {
-        key: { type: 'string', required: true, unique: true },
+        key: { type: 'string', required: true, unique: true, column: { unique: true } },
         contentType: { type: 'string', required: true },
         entryDocumentId: { type: 'string', required: true },
         locale: { type: 'string', required: true },

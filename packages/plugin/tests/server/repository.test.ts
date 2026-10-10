@@ -217,5 +217,5 @@ it('returns each locale latest job even beyond the history page size', async () 
   const response = await repository.latest(7, 'api::article.article', 'document', ['fr', 'ar']);
   expect(response).toHaveLength(2);
   expect(response.find((job) => job.targetLocale === 'ar')?.id).toBe(arabic.id);
-  expect(response.find((job) => job.targetLocale === 'fr')?.id).toBeGreaterThan(arabic.id);
+  expect(response.find((job) => job.targetLocale === 'fr')?.id).toBe(arabic.id + 30);
 });
