@@ -25,3 +25,8 @@ export const loadBrowserAccount = async (path: string): Promise<TestAccount> => 
     .parse(JSON.parse(await readFile(path, 'utf8')));
   return { email: account.adminEmail, password: account.adminPassword };
 };
+
+export const browserChildEnvironment = (
+  baseEnvironment: NodeJS.ProcessEnv,
+  _inherited: NodeJS.ProcessEnv
+): NodeJS.ProcessEnv => ({ ...baseEnvironment });

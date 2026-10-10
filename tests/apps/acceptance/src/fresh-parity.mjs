@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { browserChildEnvironment } from './browser-fixture.ts';
 import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { cp, mkdir, mkdtemp, readFile, symlink } from 'node:fs/promises';
@@ -112,14 +113,17 @@ try {
     ],
     {
       cwd: root,
-      env: {
-        ...environment,
-        ADMIN_URL: origin.origin,
-        READER_PORT: String(port),
-        TESTBED_ACCOUNT_FILE: accountFile,
-        TESTBED_MOCK_CONTROL_FILE: process.env.TESTBED_MOCK_CONTROL_FILE,
-        TESTBED_EXTERNAL_SERVER: 'true',
-      },
+      env: browserChildEnvironment(
+        {
+          ...environment,
+          ADMIN_URL: origin.origin,
+          READER_PORT: String(port),
+          TESTBED_ACCOUNT_FILE: accountFile,
+          TESTBED_MOCK_CONTROL_FILE: process.env.TESTBED_MOCK_CONTROL_FILE,
+          TESTBED_EXTERNAL_SERVER: 'true',
+        },
+        process.env
+      ),
       timeout: 900000,
       maxBuffer: 4000000,
     }
