@@ -1,0 +1,27 @@
+{
+  "name": "@gt/acceptance",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run tests",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src tests e2e *.ts",
+    "format": "oxfmt --check .",
+    "mock": "tsx src/run-mock.ts",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@generaltranslation/api": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "catalog:",
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
