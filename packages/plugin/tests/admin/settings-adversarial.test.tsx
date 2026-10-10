@@ -111,6 +111,22 @@ describe('settings boundary cases', () => {
       true
     );
   });
+  it('allows individual media fields only after metadata is enabled', () => {
+    const save = mount();
+    const mediaField = screen.getByRole('checkbox', { name: 'Translate cover' });
+    expect(mediaField.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Translate media alt text and captions for api::article.article',
+      })
+    );
+    expect(mediaField.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(mediaField);
+    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    expect(
+      save.mock.calls[0]?.[0].contentTypes['api::article.article'].fields.cover.translate
+    ).toBe(false);
+  });
   it('terminates recursive component schema traversal', () => {
     const schema: ContentSchema = {
       uid: 'a',

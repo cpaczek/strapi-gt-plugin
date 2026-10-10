@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import type { GtProject } from '../../../shared/contracts';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { useRBAC } from '@strapi/strapi/admin';
 import { PERMISSIONS } from '../../../shared/constants';
@@ -10,11 +12,15 @@ import { SettingsForm } from '../components/SettingsForm';
 
 export const SettingsPage = () => {
   const text = useText();
+  const [connection, setConnection] = useState<GtProject>();
   const permissions = useRBAC([
     { action: PERMISSIONS.readSettings },
     { action: PERMISSIONS.writeSettings },
   ]);
-  const canRead = permissions.allowedActions.canReadSettings === true;
+  const canRead =
+    !permissions.isLoading &&
+    !permissions.error &&
+    permissions.allowedActions.canReadSettings === true;
   const resource = useResource(canRead ? '/settings' : null, settingsSchema);
   const mutation = useMutation();
   if (permissions.isLoading) return <Loading />;
@@ -35,11 +41,13 @@ export const SettingsPage = () => {
             variant="secondary"
             disabled={mutation.busy || !resource.result}
             loading={mutation.busy}
-            onClick={() =>
-              void mutation.run('post', '/connection', {}, connectionSchema, (result) =>
-                mutation.setNotice(result.message)
-              )
-            }
+            onClick={() => {
+              setConnection(undefined);
+              void mutation.run('post', '/connection', {}, connectionSchema, (result) => {
+                mutation.setNotice(result.message);
+                setConnection(result.project);
+              });
+            }}
           >
             {text('settings.test')}
           </Button>
@@ -53,6 +61,22 @@ export const SettingsPage = () => {
           </>
         )}
         {mutation.notice && <Notice diagnostic={mutation.notice} />}
+        {connection && (
+          <Box padding={4} background="neutral0" hasRadius>
+            <Flex direction="column" alignItems="stretch" gap={2}>
+              <Typography fontWeight="bold">
+                {text('settings.connectedProject', { name: connection.name, id: connection.id })}
+              </Typography>
+              <Typography>
+                {text('settings.connectedLocales', {
+                  locales: [...new Set([connection.sourceLocale, ...connection.locales])].join(
+                    ', '
+                  ),
+                })}
+              </Typography>
+            </Flex>
+          </Box>
+        )}
         {resource.loading && <Loading />}
         {resource.result && (
           <SettingsForm
@@ -66,7 +90,10 @@ export const SettingsPage = () => {
                 '/settings',
                 settings,
                 settingsSchema,
-                resource.refresh,
+                () => {
+                  setConnection(undefined);
+                  resource.refresh();
+                },
                 messages.settingsSaved()
               )
             }

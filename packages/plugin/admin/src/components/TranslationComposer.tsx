@@ -57,13 +57,14 @@ export const TranslationComposer = ({
               label={`${locale.name} (${locale.code})`}
               checked={allowedTargets.includes(locale.code)}
               disabled={busy}
-              onChange={(checked) =>
+              onChange={(checked) => {
+                setConsent(false);
                 setTargets((current) =>
                   checked
                     ? [...current, locale.code]
                     : current.filter((target) => target !== locale.code)
-                )
-              }
+                );
+              }}
             />
           ))}
       </Flex>

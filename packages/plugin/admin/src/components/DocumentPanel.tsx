@@ -86,7 +86,7 @@ export const DocumentPanel = ({
       ? currentLocale
       : (options.targetLocales[0]?.code ?? '')
   );
-  const query = new URLSearchParams({ contentType: model, documentId });
+  const query = new URLSearchParams({ contentType: model, documentId, latestPerLocale: 'true' });
   const jobs = useResource(`/jobs?${query}`, jobsSchema, UI_POLL_MS);
   return (
     <Flex direction="column" alignItems="stretch" gap={4}>
