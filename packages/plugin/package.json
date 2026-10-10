@@ -38,9 +38,9 @@
     "watch": "strapi-plugin watch",
     "test": "vitest run",
     "typecheck": "tsc -p server/tsconfig.json && tsc -p admin/tsconfig.json",
-    "lint": "oxlint server admin shared tests",
+    "lint": "oxlint server admin shared tests scripts",
     "format": "oxfmt --check server admin shared tests",
-    "size": "size-limit"
+    "size": "node scripts/check-size.mjs"
   },
   "dependencies": {
     "@generaltranslation/api": "catalog:",
@@ -96,7 +96,8 @@
   "size-limit": [
     {
       "path": "dist/admin/*.mjs",
-      "limit": "65 kB"
+      "limit": "65 kB",
+      "brotli": false
     }
   ],
   "engines": {
