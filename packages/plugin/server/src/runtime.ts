@@ -38,6 +38,7 @@ import {
   objectRecord,
   parseBody,
   settingsSchema,
+  jsonValue,
   type StoredJob,
 } from './validation';
 import { createWorker } from './worker';
@@ -58,7 +59,7 @@ const mutationFields = (
     const entries = Array.isArray(value) ? value : [value];
     return entries.flatMap((entry) => {
       if (!objectRecord(entry)) return [path];
-      const component = field.type === 'dynamiczone' ? entry.__component : field.component;
+      const component = field.component;
       const child = typeof component === 'string' ? components[component] : undefined;
       return child ? mutationFields(entry, child, components, path) : [path];
     });
@@ -196,6 +197,18 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
       )
         return fail('Translation settings changed; start a new translation');
       const fresh = await prepare(job);
+      const savedSchema = jsonValue.parse(
+        JSON.parse(
+          JSON.stringify({ schema: prepared.input.schema, components: prepared.input.components })
+        )
+      );
+      const currentSchema = jsonValue.parse(
+        JSON.parse(
+          JSON.stringify({ schema: fresh.input.schema, components: fresh.input.components })
+        )
+      );
+      if (hashValue(savedSchema) !== hashValue(currentSchema))
+        return fail('The content schema changed; start a new translation');
       if (fresh.sourceHash !== prepared.sourceHash)
         throw new DiagnosticError(messages.staleSource());
       if (fresh.targetHash !== prepared.targetHash) throw new DiagnosticError(messages.humanEdit());
