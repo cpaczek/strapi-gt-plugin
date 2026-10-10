@@ -25,12 +25,11 @@ test('article navigation retains identity across language changes', async ({ pag
   ).toBeVisible();
   await expect(page).toHaveURL(/\/en\/articles\/[^/]+$/);
   const documentId = new URL(page.url()).pathname.split('/').at(-1);
-  await page.getByRole('link', { name: 'Français', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/fr/articles/${documentId}$`));
+  await page.getByRole('link', { name: 'العربية', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/ar/articles/${documentId}$`));
   await expect(
     page.getByRole('heading', { name: 'This story is not available in this language.' })
   ).toBeVisible();
-  await page.getByRole('link', { name: 'العربية', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });

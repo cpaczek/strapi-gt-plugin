@@ -11,6 +11,8 @@ export const FeaturePlayground = ({ locale }: { locale: string }) => {
     mood: 'calm',
     cutoff: 36,
     timeZone: 'UTC',
+    numberStyle: 'decimal',
+    numberingSystem: 'latn',
   });
   const [rate, setRate] = useState(0.92);
   const output = formatEnderLedger(input);
@@ -31,6 +33,29 @@ export const FeaturePlayground = ({ locale }: { locale: string }) => {
         </p>
       </div>
       <div className="lab-controls">
+        <label>
+          Number style
+          <select
+            value={input.numberStyle}
+            onChange={(event) => setInput({ ...input, numberStyle: event.target.value })}
+          >
+            <option value="decimal">Decimal</option>
+            <option value="percent">Percent</option>
+            <option value="unit">Distance in meters</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
+        <label>
+          Price and number digits
+          <select
+            value={input.numberingSystem}
+            onChange={(event) => setInput({ ...input, numberingSystem: event.target.value })}
+          >
+            <option value="latn">Latin: 123</option>
+            <option value="arab">Arabic: ١٢٣</option>
+            <option value="deva">Devanagari: १२३</option>
+          </select>
+        </label>
         <label>
           Formatting language
           <select
@@ -120,7 +145,10 @@ export const FeaturePlayground = ({ locale }: { locale: string }) => {
         <div className="lab-result">
           <span>Number formatting</span>
           <output>{output.number}</output>
-          <small>Grouping, decimals, and the cost of poor decisions.</small>
+          <small>
+            Decimal, compact, percent, or meters. A ratio of 0.5 is 50%. Units are formatted, not
+            converted.
+          </small>
         </div>
         <div className="lab-result result-message">
           <span>Plural + select messages</span>
@@ -214,8 +242,9 @@ export const FeaturePlayground = ({ locale }: { locale: string }) => {
         </output>
       </div>
       <p className="lab-footnote">
-        Nine public GT formatters, plus locale helpers. These controls need no API key. Published
-        story translations and the slang glossary come from the Strapi workflow above.
+        Nine public GT formatters, plus locale helpers. Sample sentences, list items, and cutoff
+        text stay in English. These controls need no API key. Published story translations and the
+        slang glossary come from the Strapi workflow above.
       </p>
     </section>
   );
