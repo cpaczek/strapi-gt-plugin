@@ -57,7 +57,7 @@ const translated = (value: string | null = 'Nuages') =>
     assetId: '1',
     property: 'alternativeText',
     sourceHash: mediaSourceHash(asset, 'alternativeText', 'Article photograph'),
-    structureHash: mediaStructureHash(document),
+    structureHash: mediaStructureHash(document, ['image']),
     value,
     origin: 'translated',
   }) as const;
