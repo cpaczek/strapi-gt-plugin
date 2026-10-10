@@ -114,10 +114,9 @@ committed client configuration.
 ## Versioning and release
 
 Add a Changeset for a user-visible plugin change. Describe the resulting behavior
-and choose the appropriate patch, minor or major bump. The initial minor Changeset
-starts from the unpublished `0.0.0` manifest and produces `0.1.0` when local
-versioning runs. The default Changesets changelog generator does not require an
-invented repository URL.
+and choose the appropriate patch, minor or major bump. Local versioning updates the package
+manifest and CHANGELOG. The workspace uses the default Changesets changelog
+generator; repository links can be added after a remote exists.
 
 The release workflow runs only by manual dispatch on `main`; publishing defaults
 to off. Configure the actual repository and npm trusted-publishing relationship

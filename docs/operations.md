@@ -54,15 +54,18 @@ automation. The plugin's own target writes do not trigger another translation.
 ## Retries and recovery
 
 Job history shows the current stage and actionable failure. Persisted file IDs,
-versions and remote job IDs allow a restart to resume known GT work. Retryable
-responses use bounded exponential backoff and jitter, respecting a longer GT
-retry delay. Invalid credentials, unsupported locales and invalid requests need
-correction before retry.
+versions and remote job IDs allow a restart to resume known GT work. Completed
+runtime chunks are saved too, so a later rejected batch does not replay confirmed
+translations. Retryable rejections and read failures use bounded exponential
+backoff and jitter, respecting a longer GT retry delay. Invalid credentials,
+unsupported locales and invalid requests need correction before retry.
 
-A lost response can leave it unclear whether GT accepted a paid request. The
-plugin does not promise exactly-once billing. Review GT activity before confirming
-a manual retry; a repeated request or forced retranslation may incur another
-charge. Job history requires that acknowledgement for retry.
+When a paid runtime or enqueue request has an uncertain outcome, the job stops
+for review instead of automatically repeating it. This includes a lost response,
+an ambiguous server failure or a worker interruption before the result was saved.
+The plugin does not promise exactly-once billing. Check GT activity before
+confirming a manual retry; a repeated request or forced retranslation may incur
+another charge. Job history requires that acknowledgement for retry.
 
 Settings or permission changes can make a queued job ineligible. Review the
 failure, correct the configuration or role, and start a new translation if its
