@@ -26,7 +26,9 @@ const record = z.object({ id: z.number() }).passthrough();
 const sourceRecord = record.extend({ documentId: z.string(), locale: z.string() });
 const fixtureSymbol = Symbol.for('general-translation.real-server-test');
 
-export const startStrapiFixture = async () => {
+export const startStrapiFixture = async (
+  options: { uid?: boolean; gtBaseUrl?: string; locales?: string[] } = {}
+) => {
   await mkdir(resolve(root, '.work/server-integration'), { recursive: true });
   const directory = await mkdtemp(resolve(root, '.work/server-integration/app-'));
   const write = async (path: string, value: unknown, json = false) => {
@@ -53,6 +55,10 @@ export const startStrapiFixture = async () => {
       image: { type: 'media', multiple: false, pluginOptions: { i18n: { localized: true } } },
     },
   };
+  if (options.uid)
+    Object.assign(schema.attributes, {
+      slug: { type: 'uid', targetField: 'title', pluginOptions: { i18n: { localized: true } } },
+    });
   await write(
     'package.json',
     {
@@ -85,7 +91,7 @@ export const startStrapiFixture = async () => {
   );
   await write(
     'config/plugins.js',
-    `module.exports = ${JSON.stringify({ 'general-translation': { enabled: true, resolve: resolve(directory, 'plugin'), config: { baseUrl: mock.url } } })};`
+    `module.exports = ${JSON.stringify({ 'general-translation': { enabled: true, resolve: resolve(directory, 'plugin'), config: { baseUrl: options.gtBaseUrl ?? mock.url } } })};`
   );
   await write(
     'config/server.js',
@@ -182,7 +188,7 @@ export const startStrapiFixture = async () => {
     await strapi.load();
     const runtime = plugin.services.translation({ strapi });
     await runtime.worker.stop();
-    for (const code of ['fr', 'ar'])
+    for (const code of options.locales ?? ['fr', 'ar'])
       await strapi.db.query('plugin::i18n.locale').create({ data: { code, name: code } });
     const role = record.parse(
       await strapi.db.query('admin::role').findOne({ where: { code: 'strapi-super-admin' } })
@@ -218,6 +224,7 @@ export const startStrapiFixture = async () => {
         locale: 'en',
         data: {
           title: 'Hello',
+          ...(options.uid ? { slug: 'fixture-source-hello' } : {}),
           summary: 'A quiet day',
           image: asset.id,
           createdBy: actor.id,

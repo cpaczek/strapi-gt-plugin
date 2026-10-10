@@ -304,7 +304,7 @@ describe('adversarial checkpoints and metadata', () => {
     );
     expect(apply(second, identity(second.segments)).patch.slug).toBe('second');
   });
-  it('copies configured UIDs and retains Unicode letters when regenerating', () => {
+  it('copies configured UIDs and transliterates regenerated Unicode text', () => {
     const copy = prepare(
       prepareInput(
         { slug: 'copy-me' },
@@ -318,14 +318,14 @@ describe('adversarial checkpoints and metadata', () => {
         { rules: { slug: { translate: true, uidStrategy: 'regenerate' } } }
       )
     );
-    expect(apply(regenerate, identity(regenerate.segments)).patch.slug).toBe('مرحبا-بك');
+    expect(apply(regenerate, identity(regenerate.segments)).patch.slug).toBe('mrhba-bk');
   });
-  it('rejects UID regeneration without a translated title or with punctuation-only output', () => {
+  it('rejects UID regeneration without a translated title or with whitespace-only output', () => {
     const rules = { slug: { translate: true, uidStrategy: 'regenerate' as const } };
     expect(() => apply(prepare(prepareInput({ slug: 'source' }, { rules })), {})).toThrow();
     const prepared = prepare(prepareInput({ title: 'Title', slug: 'source' }, { rules }));
     expect(() =>
-      apply(prepared, Object.fromEntries(prepared.segments.map((entry) => [entry.id, '!!!'])))
+      apply(prepared, Object.fromEntries(prepared.segments.map((entry) => [entry.id, '   '])))
     ).toThrow();
   });
   it('keeps unrelated checkpoints and rejects nonfinite numeric hashes', () => {

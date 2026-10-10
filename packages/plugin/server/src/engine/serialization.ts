@@ -1,3 +1,4 @@
+import slugify from '@sindresorhus/slugify';
 import type {
   AppliedTranslation,
   ContentSchema,
@@ -11,7 +12,7 @@ import type {
   TranslationEngine,
   TranslationSegment,
 } from '../../../shared/contracts';
-import { MAX_SOURCE_BYTES } from '../../../shared/constants';
+import { MAX_SOURCE_BYTES, UID_FALLBACK_PREFIX } from '../../../shared/constants';
 import { messages } from '../../../shared/messages';
 import { GtRequestError, invalidTranslation } from './errors';
 import { hashValue, isObject, mediaSourceHash } from './hash';
@@ -417,13 +418,22 @@ const apply = (
       const title = atPath(result.patch, sibling) ?? atPath(input.target, sibling);
       if (typeof title !== 'string')
         throw invalidTranslation('A slug cannot be generated without its translated source field');
-      value = title
+      const normalizedTitle = title.normalize('NFKC').trim();
+      if (!normalizedTitle)
+        throw invalidTranslation('The translated title cannot produce a nonempty slug');
+      const letters = normalizedTitle
         .normalize('NFKD')
         .replace(/\p{M}+/gu, '')
-        .toLocaleLowerCase('en')
-        .replace(/[^\p{L}\p{N}]+/gu, '-')
-        .replace(/^-|-$/g, '');
-      if (!value) throw invalidTranslation('The translated title cannot produce a nonempty slug');
+        .replace(/[^\p{L}\p{N}]+/gu, ' ');
+      value = slugify(letters, { decamelize: false });
+      if (!value) {
+        value = `${UID_FALLBACK_PREFIX}-${hashValue({
+          title: normalizedTitle,
+          contentType: input.schema.uid,
+          document: input.source.documentId ?? unit.value,
+          path: [...unit.path],
+        })}`;
+      }
     }
     write(unit, value);
     result.checkpoints[pathKey(unit.path)] = {

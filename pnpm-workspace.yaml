@@ -20,6 +20,7 @@ catalog:
   '@generaltranslation/api': '0.5.4'
   '@generaltranslation/supported-locales': '2.1.42'
   '@playwright/test': '1.64.0'
+  '@sindresorhus/slugify': '3.0.1'
   '@size-limit/file': '14.2.0'
   '@strapi/admin': '5.57.0'
   '@strapi/content-manager': '5.57.0'

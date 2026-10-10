@@ -179,6 +179,9 @@ catalogs:
     '@playwright/test':
       specifier: 1.64.0
       version: 1.64.0
+    '@sindresorhus/slugify':
+      specifier: 3.0.1
+      version: 3.0.1
     '@size-limit/file':
       specifier: 14.2.0
       version: 14.2.0
@@ -379,6 +382,9 @@ importers:
       '@generaltranslation/supported-locales':
         specifier: 'catalog:'
         version: 2.1.42
+      '@sindresorhus/slugify':
+        specifier: 'catalog:'
+        version: 3.0.1
       generaltranslation:
         specifier: 'catalog:'
         version: 9.5.6
@@ -3423,9 +3429,17 @@ packages:
     resolution: {integrity: sha512-ujZRbmmizX26yS/HnB3P9QNlNa4+UvHh+rIse3RbOXLp8yl6n1TxB4t7NHggtVgS8QmmOtzXo48kCxZGACpkPw==}
     engines: {node: '>=10'}
 
+  '@sindresorhus/slugify@3.0.1':
+    resolution: {integrity: sha512-N1oPvN6sytRKZCskv0L+vSyvnUYi9JplPXZ90lT6EBsijjHrUdoXttb0Lna6pw1TWMe8vlajQnLDtU9KYHqtDg==}
+    engines: {node: '>=20'}
+
   '@sindresorhus/transliterate@0.1.2':
     resolution: {integrity: sha512-5/kmIOY9FF32nicXH+5yLNTX4NJ4atl7jRgqAJuIn/iyDFXBktOKDxCvyGE/EzmF4ngSUvjXxQUQlQiZ5lfw+w==}
     engines: {node: '>=10'}
+
+  '@sindresorhus/transliterate@2.3.1':
+    resolution: {integrity: sha512-gVaaGtKYMYAMmI8buULVH3A2TXVJ98QiwGwI7ddrWGuGidGC2uRt4FHs22+8iROJ0QTzju9CuMjlVsrvpqsdhA==}
+    engines: {node: '>=20'}
 
   '@size-limit/file@14.2.0':
     resolution: {integrity: sha512-ROqMjC8Pi/ogIIm79Y4u8YieXJb++MaZWbdv/am16l4cS9CxSUXmqP3igIXyv3gK3LMG6DkZdWSM5KVND2ug7g==}
@@ -12303,10 +12317,17 @@ snapshots:
       '@sindresorhus/transliterate': 0.1.2
       escape-string-regexp: 4.0.0
 
+  '@sindresorhus/slugify@3.0.1':
+    dependencies:
+      '@sindresorhus/transliterate': 2.3.1
+      escape-string-regexp: 5.0.0
+
   '@sindresorhus/transliterate@0.1.2':
     dependencies:
       escape-string-regexp: 2.0.0
       lodash.deburr: 4.1.0
+
+  '@sindresorhus/transliterate@2.3.1': {}
 
   '@size-limit/file@14.2.0(size-limit@14.2.0)':
     dependencies:
