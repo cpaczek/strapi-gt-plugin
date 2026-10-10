@@ -12,7 +12,10 @@ import { JobTable } from '../components/JobTable';
 export const JobsPage = () => {
   const text = useText();
   const permissions = useRBAC(Object.values(PERMISSIONS).map((action) => ({ action })));
-  const allowed = Object.values(permissions.allowedActions).some(Boolean);
+  const allowed =
+    !permissions.isLoading &&
+    !permissions.error &&
+    Object.values(permissions.allowedActions).some(Boolean);
   const canTranslate =
     permissions.allowedActions.canTranslate || permissions.allowedActions.canBulkTranslate;
   const [page, setPage] = useState(1);

@@ -161,6 +161,7 @@ export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFor
                         ...DEFAULT_FIELD_RULE,
                         translate: field.type !== 'uid',
                       };
+                      const mediaDisabled = field.type === 'media' && !config.mediaMetadata;
                       const parentDisabled =
                         parent
                           ?.split('.')
@@ -174,8 +175,8 @@ export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFor
                           <Flex direction="column" alignItems="stretch" gap={3}>
                             <Toggle
                               label={text('settings.translateField', { path })}
-                              checked={rule.translate}
-                              disabled={disabled || parentDisabled}
+                              checked={rule.translate && !mediaDisabled}
+                              disabled={disabled || parentDisabled || mediaDisabled}
                               onChange={(translate) =>
                                 updateField(schema.uid, path, { translate }, field.type === 'uid')
                               }
@@ -183,7 +184,9 @@ export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFor
                             <TextField
                               label={text('settings.context', { path })}
                               value={rule.context ?? ''}
-                              disabled={disabled || !rule.translate || parentDisabled}
+                              disabled={
+                                disabled || !rule.translate || parentDisabled || mediaDisabled
+                              }
                               onChange={(context) =>
                                 updateField(schema.uid, path, { context }, field.type === 'uid')
                               }

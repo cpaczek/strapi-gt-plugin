@@ -13,6 +13,7 @@ const selectable = new Set([
   'component',
   'dynamiczone',
   'uid',
+  'media',
 ]);
 export const selectableFields = (
   schema: ContentSchema,
