@@ -18,7 +18,12 @@ interface WorkerDependencies {
 }
 export const classifyFailure = (
   failure: unknown
-): { diagnostic: Diagnostic; retryable: boolean; retryAfterMs?: number } => {
+): {
+  diagnostic: Diagnostic;
+  retryable: boolean;
+  retryAfterMs?: number;
+  acceptance?: 'not-sent' | 'rejected' | 'unknown';
+} => {
   if (failure instanceof DiagnosticError)
     return { diagnostic: failure.diagnostic, retryable: false };
   if (
@@ -42,7 +47,14 @@ export const classifyFailure = (
       return {
         diagnostic,
         retryable: failure.retryable,
-        ...(typeof failure.retryAfterMs === 'number' && failure.retryAfterMs >= 0
+        ...(failure.acceptance === 'not-sent' ||
+        failure.acceptance === 'rejected' ||
+        failure.acceptance === 'unknown'
+          ? { acceptance: failure.acceptance }
+          : {}),
+        ...(typeof failure.retryAfterMs === 'number' &&
+        Number.isFinite(failure.retryAfterMs) &&
+        failure.retryAfterMs >= 0
           ? { retryAfterMs: failure.retryAfterMs }
           : {}),
       };
@@ -61,14 +73,21 @@ export const runJobAttempt = async (
   try {
     return await transitionJob(job, await dependencies.operations(job));
   } catch (failure) {
-    const { diagnostic, retryable, retryAfterMs } = classifyFailure(failure);
+    const { diagnostic, retryable, retryAfterMs, acceptance } = classifyFailure(failure);
+    const ambiguous =
+      ['translate', 'enqueue'].includes(job.stage) &&
+      (acceptance === 'unknown' || diagnostic.code === 'network-failure');
     const attempts = job.attempts + 1;
     const conflict = diagnostic.code === 'stale-source' || diagnostic.code === 'human-edit';
     return {
       ...job,
       attempts,
-      error: diagnostic,
-      status: conflict ? 'conflict' : retryable && attempts < RETRY_LIMIT ? 'waiting' : 'failed',
+      error: ambiguous ? messages.interruptedRequest() : diagnostic,
+      status: conflict
+        ? 'conflict'
+        : retryable && !ambiguous && attempts < RETRY_LIMIT
+          ? 'waiting'
+          : 'failed',
       nextRunAt: new Date(
         Date.now() + Math.max(dependencies.retryDelay(attempts), retryAfterMs ?? 0)
       ).toISOString(),
