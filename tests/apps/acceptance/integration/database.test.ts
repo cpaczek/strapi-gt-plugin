@@ -249,9 +249,31 @@ it('runs the durable translation with the initiating actor and records public GT
   ).toBeNull();
   const slug = z.object({ slug: z.string().min(1) }).parse(target).slug;
   expect(slug).not.toBe('');
-  await app()
-    .documents('api::article.article')
-    .publish({ documentId: source.documentId, locale: 'ar' });
+  const publication = { observed: false };
+  const unsubscribe = app().eventHub.on('entry.publish', (payload: unknown) => {
+    const event = z
+      .object({
+        uid: z.string(),
+        entry: z.object({ documentId: z.string(), locale: z.string() }),
+      })
+      .safeParse(payload);
+    if (
+      event.success &&
+      event.data.uid === 'api::article.article' &&
+      event.data.entry.documentId === source.documentId &&
+      event.data.entry.locale === 'ar'
+    )
+      publication.observed = true;
+    return Promise.resolve();
+  });
+  try {
+    await app()
+      .documents('api::article.article')
+      .publish({ documentId: source.documentId, locale: 'ar' });
+    await expect.poll(() => publication.observed).toBe(true);
+  } finally {
+    unsubscribe();
+  }
   expect(
     articleRecord.parse(
       await app()
