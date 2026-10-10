@@ -160,3 +160,13 @@ describe('admin diagnostic contracts', () => {
     expect(result.details.count).toBe('3');
   });
 });
+
+describe('interrupted request diagnostics', () => {
+  it('explains uncertain billing and requires review before retrying', () => {
+    const message = messages.interruptedRequest();
+    expect(message.code).toBe('interrupted-request');
+    expect(message.text).toContain('billed');
+    expect(message.text).toContain('before retrying');
+    expect(message.text).toContain('Keep the current content');
+  });
+});
