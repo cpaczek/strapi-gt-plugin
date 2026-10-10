@@ -1,5 +1,6 @@
 import { RUNTIME_BATCH_BYTES, RUNTIME_BATCH_ENTRIES, WORKER_POLL_MS } from '../../shared/constants';
 import type { GtClient, GtTranslationRequest, PreparedTranslation } from '../../shared/contracts';
+import { hasTranslationContext } from './engine/context';
 import { DiagnosticError, fail, type StoredJob } from './validation';
 
 export interface JobOperations {
@@ -9,7 +10,7 @@ export interface JobOperations {
   checkpoint?(completed: Record<string, string>): Promise<void>;
 }
 export const shouldUseFiles = (prepared: PreparedTranslation): boolean =>
-  prepared.segments.every((segment) => !segment.context) &&
+  prepared.segments.every((segment) => !hasTranslationContext(segment.context)) &&
   (prepared.segments.length > RUNTIME_BATCH_ENTRIES ||
     Buffer.byteLength(JSON.stringify(prepared.segments), 'utf8') > RUNTIME_BATCH_BYTES);
 

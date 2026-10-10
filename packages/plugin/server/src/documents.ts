@@ -47,7 +47,7 @@ export const createDocuments = (strapi: Core.Strapi) => ({
   },
   async transaction<T>(
     schema: ContentSchema,
-    documentId: string,
+    documentIds: string | readonly string[],
     callback: () => Promise<T>
   ): Promise<T> {
     return strapi.db.transaction(async ({ trx }) => {
@@ -56,7 +56,17 @@ export const createDocuments = (strapi: Core.Strapi) => ({
       const documentColumn =
         attribute && 'columnName' in attribute ? attribute.columnName : undefined;
       if (!documentColumn) return fail('The document identity column is unavailable');
-      await trx(metadata.tableName).where(documentColumn, documentId).select('id').forUpdate();
+      // Every enqueue/apply path takes document locks in the same order.
+      const identities = typeof documentIds === 'string' ? [documentIds] : documentIds;
+      for (const documentId of [...new Set(identities)].sort()) {
+        const rows: unknown = await trx(metadata.tableName)
+          .where(documentColumn, documentId)
+          .orderBy('id')
+          .select('id')
+          .forUpdate();
+        if (!Array.isArray(rows) || rows.length === 0)
+          return fail('The source document no longer exists');
+      }
       return callback();
     });
   },

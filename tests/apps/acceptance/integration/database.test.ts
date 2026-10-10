@@ -168,9 +168,10 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 const isTranslationRuntime = (
   value: unknown
-): value is Pick<PluginRuntime, 'enqueue' | 'worker' | 'repository'> =>
+): value is Pick<PluginRuntime, 'enqueue' | 'retry' | 'worker' | 'repository'> =>
   record(value) &&
   typeof value.enqueue === 'function' &&
+  typeof value.retry === 'function' &&
   record(value.worker) &&
   typeof value.worker.stop === 'function' &&
   typeof value.worker.execute === 'function' &&
@@ -337,4 +338,292 @@ it('runs the durable translation with the initiating actor and records public GT
   ).toBe(`[ar] ${revisedTitle}`);
   expect(runtime.mock?.requests.some((request) => request.path === '/v2/translate')).toBe(true);
   expect(JSON.stringify(runtime.mock?.requests)).not.toContain('editor@example.invalid');
+});
+
+import { afterEach } from 'vitest';
+import type { TranslationRequest } from '../../../../packages/plugin/shared/contracts';
+
+const translationRuntime = () => {
+  const service: unknown = app().plugin('general-translation').service('translation');
+  if (!isTranslationRuntime(service)) throw new TypeError('Translation service is unavailable');
+  return service;
+};
+const createEditor = async (active = true) => {
+  const role = z.object({ id: z.number() }).parse(
+    await app()
+      .db.query('admin::role')
+      .findOne({ where: { code: 'strapi-super-admin' } })
+  );
+  return z.object({ id: z.number() }).parse(
+    await app()
+      .db.query('admin::user')
+      .create({
+        data: {
+          firstname: 'Concurrent',
+          lastname: 'Editor',
+          email: `${randomBytes(8).toString('hex')}@example.invalid`,
+          isActive: active,
+          roles: [role.id],
+        },
+      })
+  );
+};
+const createSource = async () => {
+  const slug = `concurrent-${randomBytes(8).toString('hex')}`;
+  return articleRecord.parse(
+    await app()
+      .documents('api::article.article')
+      .create({ locale: 'en', data: { title: `Source ${slug}`, slug } })
+  );
+};
+const translationRequest = (documentIds: string[]): TranslationRequest => ({
+  contentType: 'api::article.article',
+  documentIds,
+  targetLocales: ['ar'],
+  force: false,
+});
+const concurrentEnqueue = async (entries: { actorId: number; documentIds: string[] }[]) => {
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requests = entries.map(async ({ actorId, documentIds }) => {
+    await gate;
+    return translationRuntime().enqueue(
+      translationRequest(documentIds),
+      actorId,
+      documentIds.length > 1 ? 'bulkTranslate' : 'translate'
+    );
+  });
+  release();
+  return Promise.allSettled(requests);
+};
+const activeJobs = async (documentIds: string[]) =>
+  z.array(z.object({ id: z.number(), actorId: z.number(), entryDocumentId: z.string() })).parse(
+    await app()
+      .db.query('plugin::general-translation.job')
+      .findMany({
+        where: {
+          entryDocumentId: { $in: documentIds },
+          status: { $in: ['queued', 'running', 'waiting'] },
+        },
+      })
+  );
+const finishTranslation = async (id: number) =>
+  expect
+    .poll(
+      async () => {
+        await translationRuntime().worker.execute();
+        const job = await translationRuntime().repository.get(id);
+        if (job?.status === 'failed' || job?.status === 'conflict')
+          throw new Error(JSON.stringify(job.error));
+        return job?.status;
+      },
+      { timeout: 60_000, interval: 20 }
+    )
+    .toBe('succeeded');
+const paidRequests = () =>
+  runtime.mock?.requests.filter(
+    (request) =>
+      request.path === '/v2/translate' || request.path === '/v2/project/translations/enqueue'
+  ).length ?? 0;
+
+describe('atomic concurrent enqueue', () => {
+  afterEach(async () => {
+    await app()
+      .db.query('plugin::general-translation.job')
+      .deleteMany({ where: { status: { $in: ['queued', 'running', 'waiting'] } } });
+  });
+  it('deduplicates simultaneous requests from the same actor before one paid submission', async () => {
+    const actor = await createEditor();
+    const source = await createSource();
+    const before = paidRequests();
+    const results = await concurrentEnqueue(
+      Array.from({ length: 6 }, () => ({ actorId: actor.id, documentIds: [source.documentId] }))
+    );
+    expect(results.every((result) => result.status === 'fulfilled')).toBe(true);
+    const ids = results.flatMap((result) =>
+      result.status === 'fulfilled' ? result.value.jobs.map((job) => job.id) : []
+    );
+    expect(new Set(ids).size).toBe(1);
+    const jobs = await activeJobs([source.documentId]);
+    expect(jobs).toHaveLength(1);
+    const job = jobs[0];
+    if (!job) throw new Error('No active job');
+    expect(job.actorId).toBe(actor.id);
+    await finishTranslation(job.id);
+    expect(paidRequests() - before).toBe(1);
+  });
+  it('keeps one initiating actor when different editors enqueue simultaneously', async () => {
+    const actors = await Promise.all([createEditor(), createEditor()]);
+    const source = await createSource();
+    const before = paidRequests();
+    const entries = actors.flatMap((actor) =>
+      Array.from({ length: 3 }, () => ({ actorId: actor.id, documentIds: [source.documentId] }))
+    );
+    const results = await concurrentEnqueue(entries);
+    const jobs = await activeJobs([source.documentId]);
+    expect(jobs).toHaveLength(1);
+    const job = jobs[0];
+    if (!job) throw new Error('No active job');
+    for (const [index, result] of results.entries()) {
+      expect(result.status).toBe(
+        entries[index]?.actorId === job.actorId ? 'fulfilled' : 'rejected'
+      );
+      if (result.status === 'fulfilled') {
+        expect(result.value.jobs.map((item) => item.id)).toEqual([job.id]);
+        expect(result.value.jobs[0]).not.toHaveProperty('prepared');
+        expect(result.value.jobs[0]).not.toHaveProperty('actorId');
+      } else expect(JSON.stringify(result.reason)).not.toContain(source.title);
+    }
+    await finishTranslation(job.id);
+    expect(paidRequests() - before).toBe(1);
+    const target = await app()
+      .documents('api::article.article')
+      .findOne({
+        documentId: source.documentId,
+        locale: 'ar',
+        status: 'draft',
+        populate: ['createdBy', 'updatedBy'],
+      });
+    expect(
+      z
+        .object({
+          createdBy: z.object({ id: z.number() }),
+          updatedBy: z.object({ id: z.number() }),
+        })
+        .parse(target)
+    ).toEqual({ createdBy: { id: job.actorId }, updatedBy: { id: job.actorId } });
+  });
+  it('rejects an unauthorized contender without disclosing or taking over the authorized job', async () => {
+    const actor = await createEditor();
+    const unauthorized = await createEditor(false);
+    const source = await createSource();
+    const results = await concurrentEnqueue([
+      { actorId: actor.id, documentIds: [source.documentId] },
+      { actorId: unauthorized.id, documentIds: [source.documentId] },
+    ]);
+    expect(results[0]?.status).toBe('fulfilled');
+    expect(results[1]?.status).toBe('rejected');
+    expect(await activeJobs([source.documentId])).toEqual([
+      expect.objectContaining({ actorId: actor.id }),
+    ]);
+    const rejected = results[1];
+    if (rejected?.status !== 'rejected') throw new Error('Unauthorized request was accepted');
+    expect(rejected.reason).toMatchObject({ diagnostic: { code: 'permission-denied' } });
+    expect(JSON.stringify(rejected.reason)).not.toContain(source.title);
+  });
+  it('deduplicates overlapping bulk selections submitted in opposite order', async () => {
+    const actor = await createEditor();
+    const sources = await Promise.all([createSource(), createSource()]);
+    const ids = sources.map((source) => source.documentId);
+    const before = paidRequests();
+    const results = await concurrentEnqueue([
+      { actorId: actor.id, documentIds: ids },
+      { actorId: actor.id, documentIds: [...ids].reverse() },
+    ]);
+    expect(results.every((result) => result.status === 'fulfilled')).toBe(true);
+    const jobs = await activeJobs(ids);
+    expect(jobs).toHaveLength(2);
+    for (const job of jobs) await finishTranslation(job.id);
+    expect(paidRequests() - before).toBe(2);
+  });
+  it('rolls back the complete bulk batch when another actor owns an existing job', async () => {
+    const owner = await createEditor();
+    const contender = await createEditor();
+    const sources = await Promise.all([createSource(), createSource()]);
+    const first = sources[0];
+    const second = sources[1];
+    if (!first || !second) throw new Error('Missing bulk sources');
+    await translationRuntime().enqueue(
+      translationRequest([second.documentId]),
+      owner.id,
+      'translate'
+    );
+    const before = paidRequests();
+    await expect(
+      translationRuntime().enqueue(
+        translationRequest([first.documentId, second.documentId]),
+        contender.id,
+        'bulkTranslate'
+      )
+    ).rejects.toMatchObject({ diagnostic: { code: 'validation' } });
+    expect(await activeJobs([first.documentId])).toEqual([]);
+    expect(await activeJobs([second.documentId])).toEqual([
+      expect.objectContaining({ actorId: owner.id }),
+    ]);
+    expect(paidRequests()).toBe(before);
+  });
+  it('does not revive an older failed job while newer work owns the same document and locale', async () => {
+    const actor = await createEditor();
+    const source = await createSource();
+    const service = translationRuntime();
+    const first = await service.enqueue(
+      translationRequest([source.documentId]),
+      actor.id,
+      'translate'
+    );
+    const failedId = first.jobs[0]?.id;
+    if (!failedId || !runtime.mock) throw new Error('Missing queued job or mock');
+    runtime.mock.failNext({ status: 400 });
+    await service.worker.execute();
+    expect(await service.repository.get(failedId)).toMatchObject({ status: 'failed' });
+    const next = await service.enqueue(
+      translationRequest([source.documentId]),
+      actor.id,
+      'translate'
+    );
+    const before = paidRequests();
+    await expect(service.retry(failedId, actor.id)).rejects.toMatchObject({
+      diagnostic: { code: 'validation' },
+    });
+    const jobs = await activeJobs([source.documentId]);
+    expect(jobs.map((job) => job.id)).toEqual(next.jobs.map((job) => job.id));
+    expect(await service.repository.get(failedId)).toMatchObject({ status: 'failed' });
+    const job = jobs[0];
+    if (!job) throw new Error('Missing active job');
+    await finishTranslation(job.id);
+    expect(paidRequests() - before).toBe(1);
+  });
+  it('serializes a retry racing a new enqueue without duplicate paid work', async () => {
+    const actor = await createEditor();
+    const source = await createSource();
+    const service = translationRuntime();
+    const first = await service.enqueue(
+      translationRequest([source.documentId]),
+      actor.id,
+      'translate'
+    );
+    const failedId = first.jobs[0]?.id;
+    if (!failedId || !runtime.mock) throw new Error('Missing queued job or mock');
+    runtime.mock.failNext({ status: 400 });
+    await service.worker.execute();
+    expect(await service.repository.get(failedId)).toMatchObject({ status: 'failed' });
+    const before = paidRequests();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const requests = [
+      async () => service.retry(failedId, actor.id),
+      async () => service.enqueue(translationRequest([source.documentId]), actor.id, 'translate'),
+    ].map(async (request) => {
+      await gate;
+      return request();
+    });
+    release();
+    const results = await Promise.allSettled(requests);
+    expect(results.some((result) => result.status === 'fulfilled')).toBe(true);
+    const jobs = await activeJobs([source.documentId]);
+    expect(jobs).toHaveLength(1);
+    const job = jobs[0];
+    if (!job) throw new Error('Missing active job');
+    for (const result of results) {
+      if (result.status === 'fulfilled')
+        expect(result.value.jobs.map((item) => item.id)).toEqual([job.id]);
+      else expect(result.reason).toMatchObject({ diagnostic: { code: 'validation' } });
+    }
+    await finishTranslation(job.id);
+    expect(paidRequests() - before).toBe(1);
+  });
 });
