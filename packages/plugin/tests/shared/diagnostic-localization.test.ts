@@ -60,6 +60,14 @@ const french = createIntl(
 );
 
 describe('localized diagnostics', () => {
+  it('localizes the documentation label without translating its URL', () => {
+    const source = messages.invalidKey();
+    const result = diagnostics.localizeDiagnostic(source, (key) =>
+      String(key) === 'diagnostic.documentation' ? 'Documentación' : undefined
+    );
+    expect(result.text).toContain(`Documentación: ${source.docs}`);
+    expect(result.docs).toBe(source.docs);
+  });
   it('formats known static clauses with a French formatter', () => {
     expect(
       diagnostics.localizeDiagnostic(messages.aiConflict(), (key) =>
