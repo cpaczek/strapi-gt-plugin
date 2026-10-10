@@ -18,7 +18,7 @@ const run = async (
   const result = await execute('pnpm', args, {
     cwd,
     maxBuffer: 8_000_000,
-    timeout: 600_000,
+    timeout: 1_800_000,
     env: {
       ...process.env,
       STRAPI_TELEMETRY_DISABLED: 'true',
@@ -126,6 +126,7 @@ try {
     GT_PROJECT_ID: 'editorial',
     GT_BASE_URL: mock.url,
     TESTBED_BROWSER_HELPER: resolve(root, 'tests/apps/acceptance/src/fresh-browser.mjs'),
+    TESTBED_PARITY_HELPER: resolve(root, 'tests/apps/acceptance/src/fresh-parity.mjs'),
   });
   if (!mock.requests.some((request) => request.path === '/v2/translate'))
     throw new Error('Packed translation did not reach the recording GT service');

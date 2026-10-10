@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { realpath } from 'node:fs/promises';
+import { realpath, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -14,6 +15,7 @@ const pluginPath = await realpath(
 assert.ok(!pluginPath.includes('/packages/plugin/'), 'Fresh install resolved the workspace source');
 const strapi = await createStrapi(await compileStrapi()).load();
 const translated = { documentId: '', title: '' };
+const accountFile = resolve('browser-account.json');
 try {
   assert.ok(strapi.plugin('general-translation'));
   const articles = await strapi
@@ -30,16 +32,26 @@ try {
     .query('admin::role')
     .findOne({ where: { code: 'strapi-super-admin' } });
   assert.equal(typeof role?.id, 'number');
-  const actor = await strapi.db.query('admin::user').create({
-    data: {
-      firstname: 'Packed',
-      lastname: 'Test editor',
-      email: `${randomBytes(8).toString('hex')}@example.invalid`,
-      isActive: true,
-      roles: [role.id],
-    },
+  const password = `${randomBytes(32).toString('hex')}Aa1!`;
+  const actor = await strapi.service('admin::user').create({
+    firstname: 'Packed',
+    lastname: 'Test editor',
+    email: `${randomBytes(8).toString('hex')}@example.invalid`,
+    password,
+    isActive: true,
+    roles: [role.id],
   });
-  const source = articles[0];
+  await writeFile(
+    accountFile,
+    JSON.stringify({ adminEmail: actor.email, adminPassword: password }),
+    {
+      mode: 0o600,
+      flag: 'wx',
+    }
+  );
+  const source = articles.find(
+    (article) => article.title !== 'The custody hearing of Dirt Block 47'
+  );
   assert.ok(source);
   const queued = await translation.enqueue(
     {
@@ -82,9 +94,26 @@ try {
       .findOne({ documentId: source.documentId, locale: 'fr', status: 'published' }),
     null
   );
-  await strapi
-    .documents('api::article.article')
-    .publish({ documentId: source.documentId, locale: 'fr' });
+  const publication = { observed: false };
+  const unsubscribe = strapi.eventHub.on('entry.publish', (payload) => {
+    if (
+      payload?.uid === 'api::article.article' &&
+      payload.entry?.documentId === source.documentId &&
+      payload.entry.locale === 'fr'
+    )
+      publication.observed = true;
+    return Promise.resolve();
+  });
+  try {
+    await strapi
+      .documents('api::article.article')
+      .publish({ documentId: source.documentId, locale: 'fr' });
+    const deadline = Date.now() + 30000;
+    while (!publication.observed && Date.now() < deadline) await pollDelay(20);
+    assert.ok(publication.observed, 'Packed publication event did not finish');
+  } finally {
+    unsubscribe();
+  }
   translated.documentId = source.documentId;
   translated.title = target.title;
   process.stdout.write(
@@ -152,6 +181,15 @@ try {
   );
   process.stdout.write(browserResult.stdout);
   process.stderr.write(browserResult.stderr);
+  const parityHelper = process.env.TESTBED_PARITY_HELPER;
+  assert.ok(parityHelper, 'Acceptance parity helper was not supplied');
+  const parityResult = await promisify(execFile)(
+    process.execPath,
+    [parityHelper, `http://127.0.0.1:${port}`, accountFile],
+    { cwd: process.cwd(), timeout: 1200000, maxBuffer: 8000000 }
+  );
+  process.stdout.write(parityResult.stdout);
+  process.stderr.write(parityResult.stderr);
   process.stdout.write(
     'Consumer pnpm start served published source and translated content over HTTP.\n'
   );
