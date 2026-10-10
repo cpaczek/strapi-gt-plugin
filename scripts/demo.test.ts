@@ -206,7 +206,7 @@ process.kill = (pid, signal) => {
 it('fails promptly when pnpm cannot spawn and leaves no children', async () => {
   const probe = await lifecycleProbe({ missingPnpm: true });
   try {
-    expect(await probe.waitForExit()).not.toBe(0);
+    expect(await probe.waitForExit()).toBe(1);
     expect(probe.output.diagnostic).toBe(true);
     expect(probe.output.unhandled).toBe(false);
     expect(await probe.pids()).toEqual([]);
@@ -221,7 +221,7 @@ it('reports an unexpected child exit zero as failure and cleans up siblings', as
     const [child] = await probe.ready();
     if (child === undefined) throw new Error('The owned child did not start');
     process.kill(child, 'SIGUSR2');
-    expect(await probe.waitForExit()).not.toBe(0);
+    expect(await probe.waitForExit()).toBe(1);
     await probe.noOrphans();
   } finally {
     await probe.cleanup();
