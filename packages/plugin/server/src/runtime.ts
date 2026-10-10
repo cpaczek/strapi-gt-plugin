@@ -360,7 +360,8 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
           : 'apply';
         jobs.push(job);
       }
-    const created = await strapi.db.transaction(async () => {
+    const { schema } = schemaFor(request.contentType, settings);
+    const created = await documents.transaction(schema, request.documentIds, async () => {
       const result: StoredJob[] = [];
       for (const job of jobs) {
         const active = await repository.active(job.key);
@@ -492,7 +493,11 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
         throw new DiagnosticError(messages.staleSource());
       if (job.prepared && fresh.targetHash !== job.prepared.targetHash)
         throw new DiagnosticError(messages.humanEdit());
-      return { jobs: [summarizeJob(await repository.retry(job))] };
+      return documents.transaction(fresh.input.schema, job.documentId, async () => {
+        if (await repository.active(job.key))
+          return fail('This document and locale already have a translation in progress');
+        return { jobs: [summarizeJob(await repository.retry(job))] };
+      });
     },
     async mediaDocument(
       contentType: string,

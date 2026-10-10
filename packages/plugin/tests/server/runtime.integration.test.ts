@@ -1234,3 +1234,35 @@ it('hides another editor job until its source field scope is known', async () =>
     ).jobs
   ).toHaveLength(1);
 });
+
+it('does not enter the write transaction after every row of its document was deleted', async () => {
+  const { runtime, strapi, settings } = app();
+  const source = await freshSource();
+  await strapi
+    .documents('api::article.article')
+    .delete({ documentId: source.documentId, locale: '*' });
+  const callback = vi.fn(async () => undefined);
+  await expect(
+    runtime.documents.transaction(
+      runtime.schemaFor('api::article.article', settings).schema,
+      source.documentId,
+      callback
+    )
+  ).rejects.toMatchObject({
+    diagnostic: { code: 'validation', details: { reason: 'The source document no longer exists' } },
+  });
+  expect(callback).not.toHaveBeenCalled();
+});
+
+it('keeps a failed job terminal while another job owns its document and locale', async () => {
+  const source = await freshSource();
+  const failedId = await queue(source.documentId);
+  app().mock.failNext({ status: 401 });
+  expect(await finish(failedId)).toMatchObject({ status: 'failed' });
+  const activeId = await queue(source.documentId);
+  await expect(app().runtime.retry(failedId, app().actorId)).rejects.toMatchObject({
+    diagnostic: { code: 'validation' },
+  });
+  expect(await app().runtime.repository.get(failedId)).toMatchObject({ status: 'failed' });
+  expect(await app().runtime.repository.get(activeId)).toMatchObject({ status: 'queued' });
+});

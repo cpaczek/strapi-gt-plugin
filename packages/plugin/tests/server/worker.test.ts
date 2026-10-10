@@ -237,3 +237,132 @@ it('still backs off an explicit paid-stage rejection', async () => {
   expect(next.status).toBe('waiting');
   expect(next.error?.code).not.toBe('interrupted-request');
 });
+
+import { createIntl, createIntlCache } from 'react-intl';
+import { GtRequestError } from '../../server/src/engine/errors';
+import { localizeDiagnostic, buildMessage } from '../../shared/messages';
+import { descriptor } from '../../admin/src/i18n';
+import frenchMessages from '../../admin/src/translations/fr.json';
+import { PLUGIN_ID, DOCS_URL } from '../../shared/constants';
+
+describe('classified diagnostic transport', () => {
+  it.each([
+    messages.validation('The saved segments do not match the source'),
+    messages.sourceLocaleMismatch('fr-CA'),
+    messages.unsupportedLocale('xx-YY'),
+    messages.providerFailure('The source file was rejected'),
+  ])('preserves sanitized fields of $code after classification and localization', (diagnostic) => {
+    const classified = classifyFailure(new GtRequestError(diagnostic));
+    expect(classified.diagnostic).toEqual(diagnostic);
+    expect(localizeDiagnostic(classified.diagnostic, () => undefined)).toEqual(diagnostic);
+    const french = createIntl(
+      {
+        locale: 'fr',
+        messages: Object.fromEntries(
+          Object.entries(frenchMessages).map(([key, value]) => [`${PLUGIN_ID}.${key}`, value])
+        ),
+      },
+      createIntlCache()
+    );
+    const localized = localizeDiagnostic(classified.diagnostic, (key) =>
+      french.formatMessage(descriptor(key))
+    );
+    expect(localized.details).toEqual(diagnostic.details);
+    expect(localized.docs).toBe(diagnostic.docs);
+    for (const detail of Object.values(diagnostic.details))
+      expect(localized.text).toContain(detail);
+    expect(localized.text).not.toBe(diagnostic.text);
+  });
+  it('preserves sanitized Unicode and markup as values without interpreting them', () => {
+    const diagnostic = messages.validation('العربية <b>field</b> {value}');
+    expect(classifyFailure(new GtRequestError(diagnostic)).diagnostic.details).toEqual(
+      diagnostic.details
+    );
+  });
+  it('does not restore credentials already redacted by the message builder', () => {
+    const diagnostic = messages.providerFailure(
+      'token=private-example gtx-private-example https://user:password@example.invalid'
+    );
+    const result = classifyFailure(new GtRequestError(diagnostic)).diagnostic;
+    expect(result.details).toEqual(diagnostic.details);
+    expect(result.docs).toBe(DOCS_URL);
+    expect(JSON.stringify(result)).not.toMatch(/private-example|password/);
+  });
+  it('never forwards unsanitized structured details', () => {
+    const diagnostic = {
+      ...messages.validation('Safe'),
+      details: { reason: 'token=private-example', locale: 'fr' },
+    };
+    const result = classifyFailure({ diagnostic, retryable: false }).diagnostic;
+    expect(JSON.stringify(result)).not.toContain('private-example');
+    expect(result.details.locale).toBe('fr');
+  });
+  it.each([
+    'https://user:password@example.invalid/help',
+    'https://example.invalid/?token=private-example',
+    'javascript:alert(1)',
+  ])('does not preserve unsafe documentation %s', (docs) => {
+    const result = classifyFailure({
+      diagnostic: { ...messages.validation('Safe'), docs },
+      retryable: false,
+    }).diagnostic;
+    expect(result.docs).toBeUndefined();
+  });
+  it('preserves a safe documentation link and warning level', () => {
+    const diagnostic = buildMessage({
+      code: 'human-edit',
+      happened: 'A target field changed',
+      details: { path: 'body' },
+      docs: 'https://example.invalid/help#review',
+      level: 'warning',
+    });
+    expect(classifyFailure(new GtRequestError(diagnostic)).diagnostic).toEqual(diagnostic);
+  });
+  it('keeps invalid detail shapes on the generic failure path', () => {
+    const result = classifyFailure({
+      diagnostic: {
+        ...messages.validation('Safe'),
+        details: { reason: { secret: 'private-example' } },
+      },
+      retryable: true,
+    });
+    expect(result.retryable).toBe(false);
+    expect(JSON.stringify(result)).not.toContain('private-example');
+  });
+});
+
+it('persists the classified engine reason before the next admin read', async () => {
+  const { worker, operations, repository } = setup();
+  const diagnostic = messages.sourceLocaleMismatch('fr-CA');
+  operations.mockRejectedValueOnce(new GtRequestError(diagnostic));
+  await worker.execute();
+  expect(repository.completeStage).toHaveBeenCalledWith(
+    expect.objectContaining({ status: 'failed', error: diagnostic })
+  );
+});
+it('omits a malformed documentation URL without dropping safe details', () => {
+  const diagnostic = { ...messages.validation('Select a locale'), docs: 'not a URL' };
+  const classified = classifyFailure(new GtRequestError(diagnostic));
+  expect(classified.diagnostic.docs).toBeUndefined();
+  expect(classified.diagnostic.details).toEqual(diagnostic.details);
+});
+
+it('preserves a safe HTTP documentation URL', () => {
+  const diagnostic = {
+    ...messages.validation('Select a locale'),
+    docs: 'http://example.invalid/help',
+  };
+  expect(classifyFailure(new GtRequestError(diagnostic)).diagnostic.docs).toBe(diagnostic.docs);
+});
+it('preserves own detail keys without mutating object prototypes', () => {
+  const diagnostic = {
+    ...messages.validation('Safe'),
+    details: Object.fromEntries([
+      ['__proto__', 'Safe field'],
+      ['constructor', 'Safe value'],
+    ]),
+  };
+  expect(classifyFailure(new GtRequestError(diagnostic)).diagnostic.details).toEqual(
+    diagnostic.details
+  );
+});
