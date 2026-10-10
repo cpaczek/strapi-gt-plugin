@@ -31,17 +31,17 @@ prove the server refuses a direct unauthorized request.
 The reader demonstrates the public GT formatting methods alongside the CMS
 content. These formatting operations run locally and require no translation key.
 
-| Method                       | Visible example                             |
-| ---------------------------- | ------------------------------------------- |
-| `formatCurrency`             | Currency symbols, grouping and minor units  |
-| `formatNum`                  | Locale-aware number presentation            |
-| `formatDateTime`             | Locale and time-zone formatting             |
-| `formatRelativeTime`         | A fixed relative interval                   |
-| `formatRelativeTimeFromDate` | A date relative to a fixed reference        |
-| `formatList`                 | Locale-aware list separators                |
-| `formatListToParts`          | List parts with individually rendered items |
-| `formatMessage`              | ICU plural and select messages              |
-| `formatCutoff`               | Short display text                          |
+| Method                       | Visible example                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| `formatCurrency`             | Currency symbols, grouping and minor units                                       |
+| `formatNum`                  | Decimal, percent, compact and meter formats; Latin, Arabic and Devanagari digits |
+| `formatDateTime`             | Locale and time-zone formatting                                                  |
+| `formatRelativeTime`         | A fixed relative interval                                                        |
+| `formatRelativeTimeFromDate` | A date relative to a fixed reference                                             |
+| `formatList`                 | Locale-aware list separators                                                     |
+| `formatListToParts`          | List parts with individually rendered items                                      |
+| `formatMessage`              | ICU plural and select messages                                                   |
+| `formatCutoff`               | Short display text                                                               |
 
 Locale helpers supply names and text direction; Arabic also exercises RTL layout.
 The currency calculator uses an explicitly shown sample rate and ordinary
