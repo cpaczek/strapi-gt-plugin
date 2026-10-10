@@ -128,6 +128,11 @@ apply a source snapshot or target state that changed while the job was running.
 | Numbers, booleans, dates, times, enums, JSON and passwords | Never sent for translation                                                                          |
 | Private or nonlocalized fields                             | Excluded                                                                                            |
 
+Regenerated UIDs transliterate the target title to ASCII. A nonempty title without
+an ASCII transliteration gets a stable `entry-` hash bound to its document and
+field. Empty titles are rejected. Strapi still validates uniqueness when publishing;
+duplicate readable slugs may need an editor change.
+
 Existing target relations are preserved. A newly created locale may have no
 category or related-entry links; assign those separately in Content Manager.
 
