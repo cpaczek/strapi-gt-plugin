@@ -15,11 +15,13 @@ afterEach(async () => {
 });
 const check = async (markdown: string, runVersions = false) => {
   await writeFile(filename, markdown);
-  return spawnSync(
+  const result = spawnSync(
     process.execPath,
     [resolve('scripts/check-readme.mjs'), filename, ...(runVersions ? ['--run-versions'] : [])],
     { encoding: 'utf8', cwd: directory }
   );
+  if (result.error) throw result.error;
+  return result;
 };
 
 describe('README shell command extraction', () => {
@@ -61,5 +63,53 @@ describe('README shell command extraction', () => {
     const result = await check('```sh\nnode --version');
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('Unclosed');
+  });
+});
+
+describe('README command boundary cases', () => {
+  it('accepts CRLF files and comments without treating comments as commands', async () => {
+    const result = await check('```sh\r\n# Install first\r\n\r\nnode --version\r\n```');
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).commands[0].line).toBe(4);
+  });
+  it('accepts tilde fences', async () => {
+    const result = await check('~~~bash\npnpm --version\n~~~');
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).commands).toHaveLength(1);
+  });
+  it('does not read a nested example inside a longer text fence', async () => {
+    const result = await check('````text\n```sh\nnode --version\n```\n````');
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).commands).toEqual([]);
+  });
+  it('accepts long ordinary package arguments without truncation', async () => {
+    const argument = 'a'.repeat(10_000);
+    const result = await check(`\`\`\`sh\npnpm ${argument}\n\`\`\``);
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).commands[0].arguments[1]).toBe(argument);
+  });
+  it('ignores multilingual prose outside command fences', async () => {
+    const result = await check('עברית 日本語\n```sh\nnode --version\n```\nالعربية');
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout).commands).toHaveLength(1);
+  });
+  it.each([
+    'node --version; touch marker',
+    'node --version && touch marker',
+    'node --version | tee marker',
+    'node --version > marker',
+    'pnpm `touch marker`',
+    'pnpm "$HOME"',
+  ])('refuses shell syntax in %s', async (command) => {
+    const result = await check(`\`\`\`sh\n${command}\n\`\`\``, true);
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain('line 2');
+  });
+  it('keeps two independent invocations isolated', async () => {
+    const first = await check('```sh\nnode --version\n```');
+    const second = await check('```json\n{}\n```');
+    expect(JSON.parse(first.stdout).commands).toHaveLength(1);
+    expect(JSON.parse(second.stdout).commands).toEqual([]);
   });
 });
