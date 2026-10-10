@@ -1,4 +1,4 @@
-import AxeBuilder from '@axe-core/playwright';
+import { assertAccessible } from './accessibility';
 import { expect, test } from '@playwright/test';
 
 test('published edition is accessible and excludes the draft control', async ({ page }) => {
@@ -9,7 +9,7 @@ test('published edition is accessible and excludes the draft control', async ({ 
   await expect(
     page.getByText('UNPUBLISHED: my extremely normal plan to steal the moon')
   ).toHaveCount(0);
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await assertAccessible(page);
   await page.screenshot({ path: '../../../.work/screenshots/reader-home.png', fullPage: true });
 });
 
@@ -32,7 +32,7 @@ test('article navigation retains identity across language changes', async ({ pag
   ).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page).toHaveTitle('Story unavailable | The Ender Post');
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await assertAccessible(page);
 });
 
 test('mobile edition has no horizontal overflow and supports keyboard navigation', async ({
@@ -46,7 +46,7 @@ test('mobile edition has no horizontal overflow and supports keyboard navigation
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await assertAccessible(page);
   await page.getByRole('heading', { level: 1 }).click();
   await page.screenshot({ path: '../../../.work/screenshots/reader-mobile.png', fullPage: true });
 });
@@ -82,7 +82,7 @@ test('GT playground changes real local formatters and marks sample conversion', 
   await page.getByLabel('Sample EUR per USD').fill('1');
   await expect(page.getByLabel('Sample conversion')).toBeVisible();
   expect(externalRequests).toEqual([]);
-  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await assertAccessible(page);
 });
 
 test('an unknown document is a real 404', async ({ page }) => {

@@ -5,11 +5,16 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
+import { startMockGt } from './mock-gt';
 
 const execute = promisify(execFile);
 const root = resolve(import.meta.dirname, '../../../..');
 const packageSchema = z.object({ name: z.string(), version: z.string() }).passthrough();
-const run = async (args: string[], cwd: string): Promise<void> => {
+const run = async (
+  args: string[],
+  cwd: string,
+  environment: Record<string, string> = {}
+): Promise<void> => {
   const result = await execute('pnpm', args, {
     cwd,
     maxBuffer: 8_000_000,
@@ -19,6 +24,7 @@ const run = async (args: string[], cwd: string): Promise<void> => {
       STRAPI_TELEMETRY_DISABLED: 'true',
 
       NEXT_TELEMETRY_DISABLED: '1',
+      ...environment,
     },
   });
   process.stdout.write(result.stdout);
@@ -112,5 +118,18 @@ await cp(
 );
 await run(['add', './strapi-plugin-general-translation.tgz'], appDirectory);
 await run(['build'], appDirectory);
-await run(['smoke'], appDirectory);
+const mockKey = randomBytes(32).toString('hex');
+const mock = await startMockGt({ apiKey: mockKey });
+try {
+  await run(['smoke'], appDirectory, {
+    GT_API_KEY: mockKey,
+    GT_PROJECT_ID: 'editorial',
+    GT_BASE_URL: mock.url,
+    TESTBED_BROWSER_HELPER: resolve(root, 'tests/apps/acceptance/src/fresh-browser.mjs'),
+  });
+  if (!mock.requests.some((request) => request.path === '/v2/translate'))
+    throw new Error('Packed translation did not reach the recording GT service');
+} finally {
+  await mock.close();
+}
 process.stdout.write(`Fresh tarball installation passed: ${appDirectory}\n`);
