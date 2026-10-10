@@ -19,7 +19,7 @@ export default defineConfig({
     process.env.TESTBED_EXTERNAL_SERVER === 'true'
       ? undefined
       : {
-          command: 'node ../../../scripts/testbed/demo.mjs --isolated',
+          command: 'node --import tsx ../../../scripts/testbed/demo.ts --isolated',
           url: `${readerUrl}/api/health`,
           reuseExistingServer: false,
           gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 },

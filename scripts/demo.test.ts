@@ -34,7 +34,7 @@ process.once('SIGTERM', () => server.close());
 `
   );
   await chmod(executable, 0o700);
-  const runner = spawn(process.execPath, [resolve('scripts/testbed/demo.mjs')], {
+  const runner = spawn(process.execPath, ['--import', 'tsx', resolve('scripts/testbed/demo.ts')], {
     env: {
       ...process.env,
       PATH: `${directory}:${dirname(process.execPath)}:${process.env.PATH ?? ''}`,
