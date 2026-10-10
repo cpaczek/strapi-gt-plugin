@@ -59,7 +59,8 @@ beforeAll(async () => {
   const directories = await compileStrapi({ appDir: resolve(root, 'playground') });
   for (const event of process.eventNames())
     preservedListeners.set(event, process.rawListeners(event));
-  runtime.strapi = await createStrapi(directories).load();
+  runtime.strapi = createStrapi(directories);
+  await runtime.strapi.load();
 });
 afterAll(async () => {
   if (runtime.strapi) {

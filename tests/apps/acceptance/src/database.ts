@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { expect } from 'vitest';
+import { vi } from 'vitest';
 
 const execute = promisify(execFile);
 export interface TestDatabase {
@@ -68,31 +68,29 @@ export const createTestDatabase = async (root: string, client: string): Promise<
     await execute(runtime, ['stop', name], { timeout: 30_000 });
   };
   try {
-    await expect
-      .poll(
-        async () => {
-          try {
-            await execute(
-              runtime,
-              [
-                'exec',
-                name,
-                ...(client === 'postgres'
-                  ? ['pg_isready', '-U', 'editorial', '-d', 'editorial']
-                  : ['mysqladmin', 'ping', '--silent']),
-              ],
-              { timeout: 5_000 }
-            );
-            return true;
-          } catch (failure) {
-            if (failure instanceof Error && 'code' in failure && typeof failure.code === 'number')
-              return false;
-            throw failure;
-          }
-        },
-        { timeout: 180_000, interval: 500 }
-      )
-      .toBe(true);
+    await vi.waitUntil(
+      async () => {
+        try {
+          await execute(
+            runtime,
+            [
+              'exec',
+              name,
+              ...(client === 'postgres'
+                ? ['pg_isready', '-U', 'editorial', '-d', 'editorial']
+                : ['mysqladmin', '--protocol=tcp', '--host=127.0.0.1', 'ping', '--silent']),
+            ],
+            { timeout: 5_000 }
+          );
+          return true;
+        } catch (failure) {
+          if (failure instanceof Error && 'code' in failure && typeof failure.code === 'number')
+            return false;
+          throw failure;
+        }
+      },
+      { timeout: 180_000, interval: 500 }
+    );
     const portResult = await execute(runtime, ['port', name, `${containerPort}/tcp`]);
     const match = /127\.0\.0\.1:(\d+)/.exec(portResult.stdout);
     if (!match?.[1]) throw new Error('Container did not expose a loopback database port');
