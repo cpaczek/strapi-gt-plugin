@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { once } from 'node:events';
-import { chmod, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { expect, it, vi } from 'vitest';
 
 it('starts built mock apps with credentials limited to Strapi', async () => {
@@ -103,3 +104,142 @@ process.once('SIGTERM', () => server.close());
     await rm(directory, { recursive: true, force: true });
   }
 }, 15_000);
+
+const alive = (pid: number): boolean => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (failure) {
+    if (failure instanceof Error && 'code' in failure && failure.code === 'ESRCH') return false;
+    throw failure;
+  }
+};
+const lifecycleProbe = async (
+  options: { missingPnpm?: boolean; disappearingGroup?: boolean } = {}
+) => {
+  const directory = await mkdtemp(join(tmpdir(), 'gt-demo-lifecycle-'));
+  await symlink(process.execPath, join(directory, 'node'));
+  if (!options.missingPnpm) {
+    const executable = join(directory, 'pnpm');
+    await writeFile(
+      executable,
+      `#!/usr/bin/env node
+const { createServer } = require('node:http');
+const { writeFileSync } = require('node:fs');
+const { join } = require('node:path');
+const server = createServer();
+server.listen(0, '127.0.0.1', () => {
+  writeFileSync(join(process.env.DEMO_PROBE_DIR, 'child-' + process.pid + '.json'), '{}');
+});
+process.once('SIGTERM', () => server.close());
+process.once('SIGUSR2', () => server.close());
+`
+    );
+    await chmod(executable, 0o700);
+  }
+  const preload = join(directory, 'disappearing-group.mjs');
+  await writeFile(
+    preload,
+    `import process from 'node:process';
+const originalKill = process.kill.bind(process);
+process.kill = (pid, signal) => {
+  const result = originalKill(pid, signal);
+  if (pid < 0) throw Object.assign(new Error('The task-owned process group disappeared'), { code: 'ESRCH' });
+  return result;
+};
+`
+  );
+  const runner = spawn(
+    process.execPath,
+    [
+      '--import',
+      'tsx',
+      ...(options.disappearingGroup ? ['--import', pathToFileURL(preload).href] : []),
+      resolve('scripts/testbed/demo.ts'),
+    ],
+    {
+      env: { ...process.env, PATH: directory, DEMO_PROBE_DIR: directory },
+      stdio: ['ignore', 'ignore', 'pipe'],
+    }
+  );
+  const exit = once(runner, 'exit');
+  const output = { diagnostic: false, unhandled: false };
+  runner.stderr.on('data', (chunk: Buffer) => {
+    output.diagnostic ||= chunk.toString().includes('General Translation:');
+    output.unhandled ||= /triggerUncaughtException|UnhandledPromiseRejection/.test(
+      chunk.toString()
+    );
+  });
+  const pids = async (): Promise<number[]> =>
+    (await readdir(directory))
+      .filter((name) => /^child-\d+\.json$/.test(name))
+      .map((name) => Number(name.slice(6, -5)));
+  const waitForExit = async (): Promise<number | null> => {
+    await vi.waitFor(
+      () => expect(runner.exitCode !== null || runner.signalCode !== null).toBe(true),
+      { timeout: 5_000 }
+    );
+    await exit;
+    return runner.exitCode;
+  };
+  const ready = async (): Promise<number[]> => {
+    await vi.waitFor(async () => expect(await pids()).toHaveLength(3), { timeout: 5_000 });
+    return pids();
+  };
+  const noOrphans = async (): Promise<void> => {
+    await vi.waitFor(async () => expect((await pids()).some(alive)).toBe(false), {
+      timeout: 5_000,
+    });
+  };
+  const cleanup = async (): Promise<void> => {
+    for (const pid of await pids()) {
+      if (alive(pid)) process.kill(pid, 'SIGTERM');
+    }
+    if (runner.exitCode === null && runner.signalCode === null) runner.kill('SIGTERM');
+    await waitForExit();
+    await noOrphans();
+    await rm(directory, { recursive: true, force: true });
+  };
+  return { runner, output, pids, ready, waitForExit, noOrphans, cleanup };
+};
+
+it('fails promptly when pnpm cannot spawn and leaves no children', async () => {
+  const probe = await lifecycleProbe({ missingPnpm: true });
+  try {
+    expect(await probe.waitForExit()).not.toBe(0);
+    expect(probe.output.diagnostic).toBe(true);
+    expect(probe.output.unhandled).toBe(false);
+    expect(await probe.pids()).toEqual([]);
+  } finally {
+    await probe.cleanup();
+  }
+});
+
+it('reports an unexpected child exit zero as failure and cleans up siblings', async () => {
+  const probe = await lifecycleProbe();
+  try {
+    const [child] = await probe.ready();
+    if (child === undefined) throw new Error('The owned child did not start');
+    process.kill(child, 'SIGUSR2');
+    expect(await probe.waitForExit()).not.toBe(0);
+    await probe.noOrphans();
+  } finally {
+    await probe.cleanup();
+  }
+});
+
+it.each([false, true])(
+  'keeps intentional SIGTERM successful when a group disappears: %s',
+  async (disappearingGroup) => {
+    const probe = await lifecycleProbe({ disappearingGroup });
+    try {
+      await probe.ready();
+      probe.runner.kill('SIGTERM');
+      expect(await probe.waitForExit()).toBe(0);
+      expect(probe.output.unhandled).toBe(false);
+      await probe.noOrphans();
+    } finally {
+      await probe.cleanup();
+    }
+  }
+);
