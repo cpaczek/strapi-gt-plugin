@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor, screen } from '@testing-library/react';
 import { IntlProvider } from 'react-intl';
 import type { ReactNode } from 'react';
 import { z } from 'zod';
@@ -159,6 +159,20 @@ describe('host permission and request behavior', () => {
     expect(query.searchParams.get('latestPerLocale')).toBe('true');
     expect(query.searchParams.get('contentType')).toBe('api::article.article');
     expect(query.searchParams.get('documentId')).toBe('one');
+  });
+  it('groups document controls in a labelled accessibility region', async () => {
+    host.get.mockResolvedValue({ data: { jobs: [], total: 0 } });
+    renderAdmin(
+      <DocumentPanel
+        model="api::article.article"
+        documentId="one"
+        options={options}
+        published={false}
+      />
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'General Translation controls' })).toBeTruthy()
+    );
   });
   it('refuses incompatible Content Manager extension objects', () => {
     expect(isContentManagerApi({ addDocumentAction: vi.fn(), addBulkAction: vi.fn() })).toBe(false);
