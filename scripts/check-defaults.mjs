@@ -8,13 +8,48 @@ const constantsPath = 'packages/plugin/shared/constants.ts';
 export const checkDefaultLiterals = (source, canonical, filename) => {
   const values = new Map(Object.entries(canonical).map(([name, value]) => [value, name]));
   const findings = [];
+  const spacingTokens = new Set();
+  const spacingAttributes = new Set([
+    'gap',
+    'rowGap',
+    'columnGap',
+    'padding',
+    'paddingTop',
+    'paddingRight',
+    'paddingBottom',
+    'paddingLeft',
+    'paddingBlock',
+    'paddingInline',
+    'margin',
+    'marginTop',
+    'marginRight',
+    'marginBottom',
+    'marginLeft',
+    'marginBlock',
+    'marginInline',
+  ]);
   walkSyntax(parseSyntax(source, filename).program, (node, parent) => {
+    if (
+      filename.startsWith('packages/plugin/admin/') &&
+      node.type === 'JSXAttribute' &&
+      spacingAttributes.has(node.name.name)
+    ) {
+      const expression = node.value?.expression;
+      const token = literalValue(expression);
+      if (typeof token === 'number' && Number.isInteger(token) && token >= 0 && token <= 12)
+        spacingTokens.add(expression);
+    }
     const literal = literalValue(node);
     const value =
       parent?.type === 'UnaryExpression' && parent.operator === '-' && typeof literal === 'number'
         ? -literal
         : literal;
-    if (value !== undefined && values.has(value) && parent?.type !== 'TSLiteralType') {
+    if (
+      value !== undefined &&
+      values.has(value) &&
+      parent?.type !== 'TSLiteralType' &&
+      !spacingTokens.has(node)
+    ) {
       const line = source.slice(0, node.start).split('\n').length;
       findings.push(
         `${filename}:${line}: import ${values.get(value)} from shared/constants instead of repeating its value`

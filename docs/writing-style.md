@@ -38,3 +38,8 @@ TypeScript literal types describe contracts or examples and are outside that
 check. Settings objects also live in the constants module; reviewers check those
 boolean and empty-container defaults because such literals have many unrelated
 uses.
+
+The admin uses the Strapi Design System spacing scale in JSX padding, margin and
+gap attributes. Integer scale tokens from 0 through 12 in those attributes are a
+narrow defaults-check exception. This does not exempt retry counts, concurrency,
+timeouts, other JSX properties or server code.
