@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { UI_POLL_MS } from '../../../shared/constants';
 import type { TranslationOptionsResponse } from '../../../shared/contracts';
-import { messages } from '../../../shared/messages';
+import { localizeDiagnostic, messages } from '../../../shared/messages';
 import { jobsSchema, mediaSchema } from '../api';
 import { useMutation, useResource } from '../hooks';
 import { localeLabel, useText } from '../i18n';
@@ -118,7 +118,11 @@ export const DocumentPanel = ({
                   {latest ? text(`status.${latest.status}`) : text('translation.none')}
                 </Typography>
               </Box>
-              {latest?.error && <Typography textColor="danger600">{latest.error.text}</Typography>}
+              {latest?.error && (
+                <Typography textColor="danger600">
+                  {localizeDiagnostic(latest.error, text).text}
+                </Typography>
+              )}
             </Box>
           );
         })}
