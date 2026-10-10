@@ -2,6 +2,7 @@ import { assertAccessible } from './accessibility';
 import { expect, test } from '@playwright/test';
 
 test('published edition is accessible and excludes the draft control', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/en');
   await expect(
     page.getByRole('heading', { name: 'The custody hearing of Dirt Block 47' })
@@ -10,6 +11,7 @@ test('published edition is accessible and excludes the draft control', async ({ 
     page.getByText('UNPUBLISHED: my extremely normal plan to steal the moon')
   ).toHaveCount(0);
   await assertAccessible(page);
+  await page.screenshot({ path: '../../../.work/screenshots/reader-viewport.png' });
   await page.screenshot({ path: '../../../.work/screenshots/reader-home.png', fullPage: true });
 });
 

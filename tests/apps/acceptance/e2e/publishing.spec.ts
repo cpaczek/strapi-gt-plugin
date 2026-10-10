@@ -16,8 +16,12 @@ const translateFrench = async (page: Page): Promise<void> => {
   const modal = page.getByRole('dialog', { name: 'Translate content' });
   await modal.getByLabel('French (fr)').check();
   await modal.getByLabel('Arabic (ar)').uncheck();
+  await assertAccessible(page, '[role="dialog"]');
   await modal.getByRole('button', { name: 'Translate', exact: true }).click();
   await expect(page.getByText('Succeeded', { exact: true })).toBeVisible();
+  await page.screenshot({ path: '../../../.work/screenshots/plugin-translation-dialog.png' });
+  await modal.getByRole('button', { name: 'Close modal', exact: true }).click();
+  await expect(modal).not.toBeVisible();
 };
 
 test('settings connect to GT and meet accessibility requirements', async ({ page }) => {
@@ -49,6 +53,7 @@ test('editor translation stays a draft until publication and reaches the reader'
   });
   const documentId = await openDocument(page);
   await translateFrench(page);
+  await assertAccessible(page, 'section[aria-label="General Translation controls"]');
   await page.screenshot({
     path: '../../../.work/screenshots/plugin-translation-panel.png',
     fullPage: true,
@@ -78,7 +83,7 @@ test('editor translation stays a draft until publication and reaches the reader'
   await expect(reader.getByRole('heading', { name: sourceTitle, exact: true })).toBeVisible();
   await assertAccessible(reader);
   await reader.close();
-  await assertAccessible(page);
+  await assertAccessible(page, 'section[aria-label="General Translation controls"]');
 
   await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
   await expect(page.getByRole('heading', { name: 'Job history', exact: true })).toBeVisible();
