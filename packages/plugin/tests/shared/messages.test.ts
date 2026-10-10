@@ -136,3 +136,27 @@ describe('diagnostic edge cases', () => {
     expect(messages.permissionDenied().text).toContain('administrator');
   });
 });
+
+describe('admin diagnostic contracts', () => {
+  it('makes forced replacement explicit and offers a safe exit', () => {
+    const warning = messages.forceRetranslate();
+    expect(warning.level).toBe('warning');
+    expect(warning.text).toContain('human edits');
+    expect(warning.text).toContain('Keep');
+  });
+  it('gives a retry path for a failed admin request', () => {
+    expect(messages.adminRequestFailure().text).toContain('Retry');
+  });
+  it('explains a Content Manager compatibility failure', () => {
+    expect(messages.adminIncompatible().text).toContain('Strapi');
+  });
+  it('reports committed settings and media changes as success', () => {
+    expect(messages.settingsSaved().level).toBe('success');
+    expect(messages.mediaSaved().level).toBe('success');
+  });
+  it('reports the actual queued job count', () => {
+    const result = messages.jobsQueued(3);
+    expect(result.level).toBe('success');
+    expect(result.details.count).toBe('3');
+  });
+});
