@@ -1,0 +1,155 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { IntlProvider } from 'react-intl';
+import type { ReactNode } from 'react';
+import { z } from 'zod';
+import { useMutation, useResource } from '../../admin/src/hooks';
+import { TranslateAction, TranslateBulkAction, TranslationPanel } from '../../admin/src/extensions';
+import { isContentManagerApi } from '../../admin/src/index';
+import { messages } from '../../shared/messages';
+import { options } from './fixtures';
+
+const host = vi.hoisted(() => ({
+  get: vi.fn(),
+  post: vi.fn(),
+  put: vi.fn(),
+  permissions: vi.fn(),
+}));
+vi.mock('@strapi/strapi/admin', () => ({ useFetchClient: () => host, useRBAC: host.permissions }));
+const wrapper = ({ children }: { children: ReactNode }) => (
+  <IntlProvider locale="en">{children}</IntlProvider>
+);
+const schema = z.object({ name: z.string() });
+const context = {
+  model: 'api::article.article',
+  documentId: 'one',
+  activeTab: 'draft',
+  collectionType: 'collection-types',
+} as const;
+const pending = <T,>() => {
+  let complete: (value: T) => void = () => {
+    throw new Error('Promise resolver not initialized');
+  };
+  const promise = new Promise<T>((resolve) => {
+    complete = resolve;
+  });
+  return { promise, complete };
+};
+afterEach(cleanup);
+beforeEach(() => {
+  vi.clearAllMocks();
+  host.get.mockResolvedValue({ data: options });
+  host.permissions.mockReturnValue({
+    allowedActions: { canTranslate: true, canBulkTranslate: true },
+    isLoading: false,
+    permissions: [],
+  });
+});
+describe('host permission and request behavior', () => {
+  it('does not request protected data when access is disabled', () => {
+    renderHook(() => useResource(null, schema));
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('shows initial loading and exposes a validated response', async () => {
+    host.get.mockResolvedValue({ data: { name: 'Result' } });
+    const { result } = renderHook(() => useResource('/example', schema));
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.result).toEqual({ name: 'Result' }));
+  });
+  it('keeps a failed load actionable without displaying raw response text', async () => {
+    host.get.mockRejectedValue(new Error('credential-fixture'));
+    const { result } = renderHook(() => useResource('/example', schema));
+    await waitFor(() => expect(result.current.error).toEqual(messages.adminRequestFailure()));
+  });
+  it('ignores stale responses after the document changes', async () => {
+    const earlier = pending<{ data: { name: string } }>();
+    host.get
+      .mockReturnValueOnce(earlier.promise)
+      .mockResolvedValueOnce({ data: { name: 'New document' } });
+    const { result, rerender } = renderHook(({ path }) => useResource(path, schema), {
+      initialProps: { path: '/one' },
+    });
+    rerender({ path: '/two' });
+    await waitFor(() => expect(result.current.result?.name).toBe('New document'));
+    await act(async () => earlier.complete({ data: { name: 'Old document' } }));
+    expect(result.current.result?.name).toBe('New document');
+  });
+  it('prevents duplicate writes while a submission is pending', async () => {
+    const request = pending<{ data: { name: string } }>();
+    host.post.mockReturnValue(request.promise);
+    const completed = vi.fn();
+    const { result } = renderHook(useMutation);
+    act(() => {
+      void result.current.run('post', '/example', {}, schema, completed);
+      void result.current.run('post', '/example', {}, schema, completed);
+    });
+    expect(host.post).toHaveBeenCalledTimes(1);
+    await act(async () => request.complete({ data: { name: 'Saved' } }));
+    expect(completed).toHaveBeenCalledWith({ name: 'Saved' });
+  });
+  it('hides the document action without translate rights', () => {
+    host.permissions.mockReturnValue({ allowedActions: {}, isLoading: false, permissions: [] });
+    const { result } = renderHook(() => TranslateAction(context), { wrapper });
+    expect(result.current).toBeNull();
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('hides the bulk action from a translate-only editor', () => {
+    host.permissions.mockReturnValue({
+      allowedActions: { canTranslate: true },
+      isLoading: false,
+      permissions: [],
+    });
+    const { result } = renderHook(
+      () =>
+        TranslateBulkAction({
+          model: context.model,
+          documents: [],
+          collectionType: 'collection-types',
+        }),
+      { wrapper }
+    );
+    expect(result.current).toBeNull();
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('uses translation options without requiring settings access', async () => {
+    const { result } = renderHook(() => TranslateAction(context), { wrapper });
+    await waitFor(() => expect(result.current?.label).toBe('Translate'));
+    expect(
+      host.get.mock.calls.every(([path]) => path === '/general-translation/translation-options')
+    ).toBe(true);
+  });
+  it('hides document actions before a document has been saved', async () => {
+    const { result } = renderHook(() => TranslateAction({ ...context, documentId: undefined }), {
+      wrapper,
+    });
+    await act(async () => {});
+    expect(result.current).toBeNull();
+  });
+  it('keeps the panel hidden while role permission checks are pending', () => {
+    host.permissions.mockReturnValue({
+      allowedActions: { canTranslate: true },
+      isLoading: true,
+      permissions: [],
+    });
+    const { result } = renderHook(() => TranslationPanel(context), { wrapper });
+    expect(result.current).toBeNull();
+    expect(host.get).not.toHaveBeenCalled();
+  });
+  it('keeps the panel available for a visible connection failure and retry', async () => {
+    host.get.mockRejectedValue(new Error('Offline'));
+    const { result } = renderHook(() => TranslationPanel(context), { wrapper });
+    await waitFor(() => expect(result.current?.title).toBe('Translation'));
+  });
+  it('refuses incompatible Content Manager extension objects', () => {
+    expect(isContentManagerApi({ addDocumentAction: vi.fn(), addBulkAction: vi.fn() })).toBe(false);
+    expect(
+      isContentManagerApi({
+        addDocumentAction: vi.fn(),
+        addBulkAction: vi.fn(),
+        addEditViewSidePanel: vi.fn(),
+      })
+    ).toBe(true);
+    expect(isContentManagerApi(null)).toBe(false);
+  });
+});
