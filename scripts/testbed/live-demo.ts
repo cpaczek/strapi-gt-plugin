@@ -49,10 +49,11 @@ export const createLiveProcesses = (
   );
   return [
     {
-      args: ['--filter', '@gt/playground', 'develop'],
+      args: ['--filter', '@gt/playground', 'start'],
       env: {
         ...environment,
         HOST: '127.0.0.1',
+        NODE_ENV: 'production',
         PORT: strapiPort,
         DATABASE_CLIENT: 'sqlite',
         DATABASE_FILENAME: resolve(root, '.work/live-demo/database.db'),
@@ -62,9 +63,10 @@ export const createLiveProcesses = (
       },
     },
     {
-      args: ['--filter', '@gt/reader', 'dev'],
+      args: ['--filter', '@gt/reader', 'start'],
       env: {
         ...readerEnvironment,
+        NODE_ENV: 'production',
         STRAPI_URL: `http://127.0.0.1:${strapiPort}`,
         READER_PORT: readerPort,
         NEXT_TELEMETRY_DISABLED: '1',
@@ -143,7 +145,7 @@ const run = async (): Promise<void> => {
       void stop(1).catch(report);
     });
     child.once('exit', (code) => {
-      if (!state.closing) void stop(code ?? 1).catch(report);
+      if (!state.closing) void stop(code || 1).catch(report);
     });
   }
 };

@@ -26,8 +26,8 @@ describe('real GT example launcher', () => {
   it('starts only Strapi and Next with a separate persistent local database', () => {
     const processes = createLiveProcesses('/repo', environment);
     expect(processes).toHaveLength(2);
-    expect(processes[0].args).toEqual(['--filter', '@gt/playground', 'develop']);
-    expect(processes[1].args).toEqual(['--filter', '@gt/reader', 'dev']);
+    expect(processes[0].args).toEqual(['--filter', '@gt/playground', 'start']);
+    expect(processes[1].args).toEqual(['--filter', '@gt/reader', 'start']);
     expect(processes[0].env.DATABASE_FILENAME).toBe('/repo/.work/live-demo/database.db');
     expect(processes[0].env.DATABASE_CLIENT).toBe('sqlite');
     expect(processes[1].env.STRAPI_URL).toBe('http://127.0.0.1:1537');
