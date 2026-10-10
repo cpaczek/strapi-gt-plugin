@@ -26,7 +26,7 @@ export default async function LocaleLayout({
           Skip to stories
         </a>
         <header className="masthead">
-          <Link className="wordmark" href={`/${locale}`}>
+          <Link className="wordmark" dir="ltr" href={`/${locale}`}>
             ender<span className="wordmark-dot">post</span>
           </Link>
           <span className="masthead-note">Unlicensed dispatches from the void</span>
