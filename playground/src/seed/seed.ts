@@ -100,7 +100,7 @@ export const seedEditorialContent = async (strapi: Core.Strapi): Promise<void> =
             glossary: { translate: true, context: editorialFieldContext },
             'glossary.term': { translate: false },
             editorialNote: { translate: true, context: editorialFieldContext },
-            slug: { translate: false, uidStrategy: 'regenerate', sourceField: 'title' },
+            slug: { translate: true, uidStrategy: 'regenerate', sourceField: 'title' },
           },
         },
       },
