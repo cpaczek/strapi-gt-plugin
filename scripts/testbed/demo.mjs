@@ -12,6 +12,7 @@ const [setupCode] = await once(setup, 'exit');
 if (setupCode !== 0) throw new Error('Local example settings could not be prepared');
 const environment = {
   ...process.env,
+  NODE_ENV: 'production',
   STRAPI_TELEMETRY_DISABLED: 'true',
 
   NEXT_TELEMETRY_DISABLED: '1',
@@ -24,8 +25,8 @@ if (process.argv.includes('--isolated')) {
 }
 const commands = [
   ['--filter', '@gt/acceptance', 'mock'],
-  ['--filter', '@gt/playground', 'develop'],
-  ['--filter', '@gt/reader', 'dev'],
+  ['--filter', '@gt/playground', 'start'],
+  ['--filter', '@gt/reader', 'start'],
 ];
 const children = commands.map((args) =>
   spawn('pnpm', args, { cwd: root, env: environment, stdio: 'inherit', detached: true })

@@ -1,9 +1,10 @@
 import 'server-only';
 import { createContentReader } from './content';
+import { STRAPI_BASE_URL } from '../../packages/plugin/shared/constants';
 
+export const strapiOrigin = process.env.STRAPI_URL ?? STRAPI_BASE_URL;
 export const contentReader = createContentReader({
-  origin: process.env.STRAPI_URL ?? 'http://127.0.0.1:1337',
+  origin: strapiOrigin,
   token: process.env.STRAPI_API_TOKEN,
 });
-export const mediaUrl = (path: string): string =>
-  new URL(path, process.env.STRAPI_URL ?? 'http://127.0.0.1:1337').href;
+export const mediaUrl = (path: string): string => new URL(path, strapiOrigin).href;

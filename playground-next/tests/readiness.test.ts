@@ -13,6 +13,7 @@ describe('reader startup readiness', () => {
     const [url, options] = transport.mock.calls[0] ?? [];
     expect(new URL(String(url)).pathname).toBe('/_health');
     expect(options?.cache).toBe('no-store');
+    expect(options?.redirect).toBe('manual');
     expect(options?.signal).toBeInstanceOf(AbortSignal);
     expect(options?.headers).toBeUndefined();
   });

@@ -20,8 +20,9 @@ export default defineConfig({
       ? undefined
       : {
           command: 'node ../../../scripts/testbed/demo.mjs --isolated',
-          url: `${readerUrl}/en`,
+          url: `${readerUrl}/api/health`,
           reuseExistingServer: false,
+          gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 },
           timeout: 180_000,
         },
 });

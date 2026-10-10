@@ -13,6 +13,8 @@ and has a separate database.
 ## Choose a mode
 
 Build the workspace first with `pnpm build`.
+Both demo commands run the built applications. Use the individual package
+development commands when editing source files.
 
 | Command          | Translation service                 | Local addresses                                                         |
 | ---------------- | ----------------------------------- | ----------------------------------------------------------------------- |
