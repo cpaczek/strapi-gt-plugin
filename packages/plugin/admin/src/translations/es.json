@@ -78,7 +78,7 @@
   "jobs.details": "Detalles",
   "jobs.retry": "Reintentar tarea {id}",
   "jobs.stage": "Etapa: {stage}. Intentos: {count}.",
-  "jobs.total": "{count, plural, one {# tarea} other {# tareas}}",
+  "jobs.total": "{count, plural, one {# tarea registrada} other {# tareas registradas}}",
   "jobs.previous": "Página anterior",
   "jobs.next": "Página siguiente",
   "jobs.page": "Página {page}",
@@ -170,5 +170,7 @@
   "diagnostic.source-locale-mismatch.fix": "Selecciona el proyecto de GT correspondiente antes de cargar los archivos de traducción",
   "diagnostic.documentation": "Documentación",
   "diagnostic.conflict-recovery.happened": "Esta traducción necesita una nueva solicitud",
-  "diagnostic.conflict-recovery.fix": "Revisa este documento en Content Manager e inicia una nueva traducción"
+  "diagnostic.conflict-recovery.fix": "Revisa este documento en Content Manager e inicia una nueva traducción",
+  "jobs.visibility": "Solo se muestran las tareas cuyo contenido de origen puedes leer actualmente. El recuento incluye los registros ocultos, por lo que algunas páginas pueden estar vacías.",
+  "jobs.filteredEmpty": "No hay tareas disponibles para ver en esta página. Es posible que se haya eliminado su contenido de origen o que hayan cambiado tus permisos."
 }

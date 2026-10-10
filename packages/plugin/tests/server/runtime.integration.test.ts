@@ -811,7 +811,7 @@ it('does not expose deleted source documents in job history', async () => {
     contentType: 'api::article.article',
     documentId: source.documentId,
   });
-  expect(history.jobs).toEqual([]);
+  expect(history).toEqual({ jobs: [], total: 1 });
 });
 it('rejects retry after the failed job source or target changed', async () => {
   const source = await freshSource();

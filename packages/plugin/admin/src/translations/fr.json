@@ -78,7 +78,7 @@
   "jobs.details": "Détails",
   "jobs.retry": "Relancer la tâche {id}",
   "jobs.stage": "Étape : {stage}. Tentatives : {count}.",
-  "jobs.total": "{count, plural, one {# tâche} other {# tâches}}",
+  "jobs.total": "{count, plural, one {# tâche enregistrée} other {# tâches enregistrées}}",
   "jobs.previous": "Page précédente",
   "jobs.next": "Page suivante",
   "jobs.page": "Page {page}",
@@ -170,5 +170,7 @@
   "diagnostic.source-locale-mismatch.fix": "Sélectionnez le projet GT correspondant avant de téléverser les fichiers de traduction",
   "diagnostic.documentation": "Documentation",
   "diagnostic.conflict-recovery.happened": "Cette traduction nécessite une nouvelle demande",
-  "diagnostic.conflict-recovery.fix": "Vérifiez ce document dans Content Manager et lancez une nouvelle traduction"
+  "diagnostic.conflict-recovery.fix": "Vérifiez ce document dans Content Manager et lancez une nouvelle traduction",
+  "jobs.visibility": "Seules les tâches dont vous pouvez actuellement lire le contenu source sont affichées. Le total inclut les tâches masquées ; certaines pages peuvent donc être vides.",
+  "jobs.filteredEmpty": "Aucune tâche de cette page ne peut être affichée. Le contenu source a peut-être été supprimé ou vos droits d'accès ont changé."
 }
