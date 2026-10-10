@@ -35,7 +35,10 @@ export const persistenceFixture = () => {
   };
   const query = (uid: string): RecordQueries => ({
     async findOne(parameters) {
-      const found = records(uid).find((row) => matches(row, parameters.where));
+      const candidates = records(uid).filter((row) => matches(row, parameters.where));
+      if (objectRecord(parameters.orderBy) && parameters.orderBy.id === 'desc')
+        candidates.reverse();
+      const found = candidates[0];
       return found ? structuredClone(found) : null;
     },
     async findMany(parameters) {

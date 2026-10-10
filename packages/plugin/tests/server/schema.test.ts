@@ -77,7 +77,7 @@ describe('Strapi schema metadata', () => {
     expect(
       permissionField(schema, components, { panels: [{ title: 'Title' }] }, ['panels', 0, 'title'])
     ).toBe('panels.title'));
-  it('maps dynamic zones through their component schema', () =>
+  it('checks dynamic zones using their registered root permission', () =>
     expect(
       permissionField(
         schema,
@@ -85,7 +85,7 @@ describe('Strapi schema metadata', () => {
         { zone: [{ __component: component.uid, title: 'Title' }] },
         ['zone', 0, 'title']
       )
-    ).toBe('zone.title'));
+    ).toBe('zone'));
   it('resolves nested configured fields', () =>
     expect(fieldAtPath(schema, components, 'panels.title')?.type).toBe('string'));
   it('resolves dynamic-zone configured fields', () =>
@@ -94,7 +94,7 @@ describe('Strapi schema metadata', () => {
     expect(fieldAtPath(schema, components, 'title.secret')).toBeUndefined());
 });
 
-it('resolves the actual dynamic-zone item when component schemas differ', () => {
+it('keeps heterogeneous dynamic-zone permissions at their registered root', () => {
   const second: ContentSchema = {
     uid: 'shared.other',
     localized: true,
@@ -118,5 +118,5 @@ it('resolves the actual dynamic-zone item when component schemas differ', () => 
     },
     ['zone', 1, 'content', 'title']
   );
-  expect(result).toBe('zone.content.title');
+  expect(result).toBe('zone');
 });

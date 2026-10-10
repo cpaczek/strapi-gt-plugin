@@ -88,17 +88,11 @@ export const permissionField = (
   const names: string[] = [];
   let currentSchema = schema;
   let current: unknown = document;
-  let dynamicComponents: string[] | undefined;
+
   for (const part of path) {
     if (typeof part === 'number') {
       if (Array.isArray(current)) current = current[part];
-      if (dynamicComponents && objectRecord(current)) {
-        const uid = current.__component;
-        if (typeof uid !== 'string' || !dynamicComponents.includes(uid) || !components[uid])
-          return fail('The dynamic zone component schema is unavailable');
-        currentSchema = components[uid];
-        dynamicComponents = undefined;
-      }
+
       continue;
     }
     const field = currentSchema.attributes[part];
@@ -108,15 +102,6 @@ export const permissionField = (
     if (field.component) {
       const component = components[field.component];
       if (component) currentSchema = component;
-    } else if (field.components) {
-      dynamicComponents = field.components;
-      if (!Array.isArray(current) && objectRecord(current)) {
-        const uid = current.__component;
-        if (typeof uid !== 'string' || !field.components.includes(uid) || !components[uid])
-          return fail('The dynamic zone component schema is unavailable');
-        currentSchema = components[uid];
-        dynamicComponents = undefined;
-      }
     } else break;
   }
   return names.join('.');

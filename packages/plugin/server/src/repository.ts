@@ -70,6 +70,7 @@ const jobColumns = (job: StoredJob) => ({
   actorId: job.actorId,
   contentType: job.contentType,
   entryDocumentId: job.documentId,
+  targetLocale: job.targetLocale,
   payload: job,
 });
 export const createRepository = (strapi: PersistenceHost) => {
@@ -159,6 +160,23 @@ export const createRepository = (strapi: PersistenceHost) => {
       });
       const total: unknown = await strapi.db.query(jobUid).count({ where });
       return { jobs: z.array(z.unknown()).parse(rows).map(decode), total: z.number().parse(total) };
+    },
+    async latest(
+      actorId: number,
+      contentType: string,
+      documentId: string,
+      targetLocales: string[]
+    ): Promise<StoredJob[]> {
+      const records = await Promise.all(
+        targetLocales.map(async (targetLocale) => {
+          const row: unknown = await strapi.db.query(jobUid).findOne({
+            where: { actorId, contentType, entryDocumentId: documentId, targetLocale },
+            orderBy: { id: 'desc' },
+          });
+          return row ? decode(row) : null;
+        })
+      );
+      return records.filter((job): job is StoredJob => job !== null);
     },
     async active(key: string): Promise<StoredJob | null> {
       const row: unknown = await strapi.db.query(jobUid).findOne({
