@@ -77,7 +77,7 @@ export const createTestDatabase = async (root: string, client: string): Promise<
               'exec',
               name,
               ...(client === 'postgres'
-                ? ['pg_isready', '-U', 'editorial', '-d', 'editorial']
+                ? ['pg_isready', '-h', '127.0.0.1', '-U', 'editorial', '-d', 'editorial']
                 : ['mysqladmin', '--protocol=tcp', '--host=127.0.0.1', 'ping', '--silent']),
             ],
             { timeout: 5_000 }

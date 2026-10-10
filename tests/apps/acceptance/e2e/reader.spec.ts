@@ -31,6 +31,7 @@ test('article navigation retains identity across language changes', async ({ pag
     page.getByRole('heading', { name: 'This story is not available in this language.' })
   ).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  await expect(page).toHaveTitle('Story unavailable | The Ender Post');
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 
@@ -60,6 +61,17 @@ test('GT playground changes real local formatters and marks sample conversion', 
   await page.goto('/en');
   await page.getByLabel('Formatting language').selectOption('fr');
   await expect(page.getByLabel('Formatted currency')).toContainText('1');
+  await page.getByLabel('Alleged value').fill('0.5');
+  await page.getByLabel('Number style').selectOption('percent');
+  await expect(page.getByLabel('Formatted number')).toContainText('50');
+  await expect(page.getByLabel('Formatted number')).toContainText('%');
+  await page.getByLabel('Number style').selectOption('unit');
+  await expect(page.getByLabel('Formatted number')).toContainText('mètre');
+  await page.getByLabel('Alleged value').fill('12500');
+  await page.getByLabel('Number style').selectOption('compact');
+  await expect(page.getByLabel('Formatted number')).toContainText(/k/i);
+  await page.getByLabel('Price and number digits').selectOption('arab');
+  await expect(page.getByLabel('Formatted currency')).toContainText('١');
   await page.getByLabel('Blocks in custody').fill('0');
   await expect(page.getByLabel('Custody report')).toContainText('No blocks');
   await page.getByLabel('Witness mood').selectOption('furious');
