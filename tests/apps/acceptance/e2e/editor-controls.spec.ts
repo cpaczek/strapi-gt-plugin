@@ -70,7 +70,10 @@ const test = base.extend<{ editor: EditorFixture }, { adminSession: AdminSession
       const page = await context.newPage();
       const api = await authenticatedApi(page);
       try {
-        await use({ api, storage: await context.storageState() });
+        const storage = await context.storageState();
+        // The API session is independent; leave only the actual editor tab open.
+        await context.close();
+        await use({ api, storage });
       } finally {
         await api.dispose();
         await context.close();
@@ -82,6 +85,7 @@ const test = base.extend<{ editor: EditorFixture }, { adminSession: AdminSession
     await use(adminSession.storage);
   },
   editor: async ({ page, adminSession }, use) => {
+    await page.bringToFront();
     await page.addLocatorHandler(
       page.getByText('Step 1 of 4', { exact: true }),
       () => dismissEditorTour(page),

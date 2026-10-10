@@ -13,7 +13,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // Use real Chromium for headless acceptance, matching the browser UI implementation.
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chromium' } }],
   webServer:
     process.env.TESTBED_EXTERNAL_SERVER === 'true'
       ? undefined
