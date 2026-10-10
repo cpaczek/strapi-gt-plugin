@@ -7,8 +7,13 @@ import { JobTable } from '../../admin/src/components/JobTable';
 import { messages } from '../../shared/messages';
 import { renderAdmin } from './render';
 import { failedJob } from './fixtures';
+import frenchDictionary from '../../admin/src/translations/fr.json';
+import { PLUGIN_ID } from '../../shared/constants';
 
 const french = {
+  ...Object.fromEntries(
+    Object.entries(frenchDictionary).map(([key, value]) => [`${PLUGIN_ID}.${key}`, value])
+  ),
   'general-translation.diagnostic.settings-saved.happened': 'Les paramètres ont été enregistrés',
   'general-translation.diagnostic.validation.happened': 'La demande est incorrecte',
   'general-translation.diagnostic.validation.fix': 'Corrigez les paramètres',
@@ -25,9 +30,11 @@ describe('translated diagnostic surfaces', () => {
         <Notice diagnostic={messages.settingsSaved()} />
       </IntlProvider>
     );
-    expect(screen.getByRole('status').textContent).toContain(
-      'General Translation: Les paramètres ont été enregistrés.'
-    );
+    expect(
+      screen
+        .getByText('General Translation: Les paramètres ont été enregistrés.')
+        .closest('[role="status"]')
+    ).not.toBeNull();
     expect(screen.queryByText(messages.settingsSaved().text)).toBeNull();
   });
   it('shows failed job details in the selected admin language', () => {
@@ -49,9 +56,13 @@ describe('translated diagnostic surfaces', () => {
         <Notice diagnostic={messages.validation('<img src=x onerror=alert(1)>')} />
       </IntlProvider>
     );
-    expect(screen.getByRole('alert').textContent).toContain(
-      'La demande est incorrecte. Corrigez les paramètres. <img src=x onerror=alert(1)>.'
-    );
+    expect(
+      screen
+        .getByText(
+          'General Translation: La demande est incorrecte. Corrigez les paramètres. <img src=x onerror=alert(1)>.'
+        )
+        .closest('[role="alert"]')
+    ).not.toBeNull();
     expect(screen.queryByRole('img')).toBeNull();
   });
   it('keeps the server fallback for an unknown notice and job code', () => {
