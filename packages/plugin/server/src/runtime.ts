@@ -6,6 +6,8 @@ import {
   GT_BASE_URL,
   PLUGIN_ID,
   SETTINGS_STORE_KEY,
+  MAX_JOBS_PER_REQUEST,
+  MAX_ENQUEUE_BYTES,
 } from '../../shared/constants';
 import type {
   ContentSchema,
@@ -298,6 +300,10 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
     sourceStatus: 'draft' | 'published' = 'draft'
   ) => {
     const settings = validateSettings(await savedSettings(), await metadata());
+    if (request.documentIds.length * request.targetLocales.length > MAX_JOBS_PER_REQUEST)
+      return fail(
+        'Select a smaller batch of documents or target locales; the job limit was exceeded'
+      );
     if (permission === 'translate' && request.documentIds.length !== 1)
       return fail('Use bulk translation when selecting multiple documents');
     if (
@@ -311,6 +317,7 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
     if (!actor.plugin(permission)) return denied();
     await configuration(settings);
     const jobs: StoredJob[] = [];
+    let preparedBytes = 0;
     for (const documentId of request.documentIds)
       for (const targetLocale of request.targetLocales) {
         const now = new Date().toISOString();
@@ -341,6 +348,11 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
           permission,
         };
         job.prepared = await prepare(job);
+        preparedBytes += Buffer.byteLength(JSON.stringify(job.prepared), 'utf8');
+        if (preparedBytes > MAX_ENQUEUE_BYTES)
+          return fail(
+            'Select a smaller batch; the combined document snapshots exceed the queue size limit'
+          );
         job.stage = job.prepared.segments.length
           ? shouldUseFiles(job.prepared)
             ? 'upload'

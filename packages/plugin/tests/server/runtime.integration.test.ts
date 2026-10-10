@@ -922,13 +922,11 @@ const makeDue = async (id: number) => {
 it('persists successful paid chunks and resumes only unfinished work after a rejection', async () => {
   const { runtime, strapi, mock, settings } = app();
   const source = await freshSource();
-  await strapi
-    .documents('api::article.article')
-    .update({
-      documentId: source.documentId,
-      locale: 'en',
-      data: { summary: 'A detailed paragraph. '.repeat(1200) },
-    });
+  await strapi.documents('api::article.article').update({
+    documentId: source.documentId,
+    locale: 'en',
+    data: { summary: 'A detailed paragraph. '.repeat(1200) },
+  });
   await runtime.saveSettings({
     ...settings,
     contentTypes: {
@@ -1103,4 +1101,24 @@ it('rejects oversized prepared batches without partially queueing them', async (
     (await app().runtime.repository.list(app().actorId, { page: 1, documentId: source.documentId }))
       .total
   ).toBe(0);
+}, 30_000);
+
+it('accepts the exact document-locale job limit as one atomic batch', async () => {
+  const documents: string[] = [];
+  for (let index = 0; index < MAX_JOBS_PER_REQUEST / 2; index += 1)
+    documents.push((await freshSource()).documentId);
+  const before = app().mock.requests.length;
+  const response = await app().runtime.enqueue(
+    {
+      contentType: 'api::article.article',
+      documentIds: documents,
+      targetLocales: ['fr', 'ar'],
+      force: false,
+    },
+    app().actorId,
+    'bulkTranslate'
+  );
+  expect(response.jobs).toHaveLength(MAX_JOBS_PER_REQUEST);
+  expect(new Set(response.jobs.map((job) => job.id)).size).toBe(MAX_JOBS_PER_REQUEST);
+  expect(app().mock.requests).toHaveLength(before);
 }, 30_000);
