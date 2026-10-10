@@ -116,5 +116,6 @@
   "media.status.stale": "تغير المصدر",
   "jobs.retryConsent": "راجعت GT وأوافق على إعادة محاولة المهمة {id}",
   "settings.connectedProject": "المشروع المتصل: {name} ({id})",
-  "settings.connectedLocales": "الإعدادات المحلية للمشروع: {locales}"
+  "settings.connectedLocales": "الإعدادات المحلية للمشروع: {locales}",
+  "translation.controls": "عناصر التحكم في General Translation"
 }

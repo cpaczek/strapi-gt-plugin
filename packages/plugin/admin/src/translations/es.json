@@ -116,5 +116,6 @@
   "media.status.stale": "Original modificado",
   "jobs.retryConsent": "He revisado GT y acepto reintentar la tarea {id}",
   "settings.connectedProject": "Proyecto conectado: {name} ({id})",
-  "settings.connectedLocales": "Configuraciones regionales del proyecto: {locales}"
+  "settings.connectedLocales": "Configuraciones regionales del proyecto: {locales}",
+  "translation.controls": "Controles de General Translation"
 }

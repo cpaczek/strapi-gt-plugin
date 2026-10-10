@@ -116,5 +116,6 @@
   "media.status.stale": "Source modifiée",
   "jobs.retryConsent": "J'ai vérifié GT et j'accepte de relancer la tâche {id}",
   "settings.connectedProject": "Projet connecté : {name} ({id})",
-  "settings.connectedLocales": "Langues du projet : {locales}"
+  "settings.connectedLocales": "Langues du projet : {locales}",
+  "translation.controls": "Commandes de General Translation"
 }
