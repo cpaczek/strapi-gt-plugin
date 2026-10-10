@@ -45,8 +45,34 @@ export const checkProse = (source, filename) => {
   return findings;
 };
 
+export const readCommitMessages = (range, cwd = process.cwd()) => {
+  if (typeof range !== 'string' || !range || range.startsWith('-')) {
+    throw new TypeError('Provide a Git revision or revision range.');
+  }
+  return execFileSync('git', ['log', '--format=%B%x00', range, '--'], {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+    .split('\0')
+    .map((message) => message.trim())
+    .filter(Boolean);
+};
+
 const run = () => {
   const args = process.argv.slice(2);
+  const historyIndex = args.indexOf('--commit-range');
+  if (historyIndex >= 0) {
+    const messages = readCommitMessages(args[historyIndex + 1]);
+    const findings = messages.flatMap((message, index) =>
+      checkProse(message, `commit-${index + 1}`)
+    );
+    if (findings.length) {
+      process.stderr.write(`${findings.join('\n')}\n`);
+      process.exitCode = 1;
+    } else process.stdout.write(`Commit prose check passed (${messages.length} commits).\n`);
+    return;
+  }
   const commitIndex = args.indexOf('--commit-msg');
   const files =
     commitIndex >= 0

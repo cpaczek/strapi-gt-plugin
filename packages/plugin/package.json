@@ -1,6 +1,6 @@
 {
   "name": "strapi-plugin-general-translation",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Community plugin for translating localized Strapi content with General Translation.",
   "keywords": [
     "i18n",

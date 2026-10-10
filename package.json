@@ -20,10 +20,11 @@
     "test:coverage": "pnpm --filter strapi-plugin-general-translation exec vitest run --coverage",
     "test:integration": "pnpm --filter @gt/acceptance test:integration",
     "test:e2e": "pnpm --filter @gt/acceptance test:e2e",
-    "test:packaging": "pnpm --filter @gt/acceptance test:packaging"
+    "test:packaging": "pnpm --filter @gt/acceptance test:packaging",
+    "demo": "node scripts/testbed/demo.mjs",
+    "release-packages": "changeset publish"
   },
   "devDependencies": {
-    "@changesets/changelog-git": "catalog:",
     "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
