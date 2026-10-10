@@ -1,5 +1,6 @@
 import type { ContentTypeSettings, FieldRule, PluginSettings } from './contracts';
 
+export const UID_FALLBACK_PREFIX = 'entry';
 export const PLUGIN_ID = 'general-translation';
 export const MESSAGE_PREFIX = 'General Translation:';
 export const GT_BASE_URL = 'https://api.gtx.dev';

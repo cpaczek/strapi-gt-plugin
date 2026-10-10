@@ -84,21 +84,17 @@ const app = () => {
 };
 const translate = async (title: string, locale: string) => {
   const { strapi, runtime, actorId } = app();
-  const source = z
-    .object({ documentId: z.string() })
-    .parse(
-      await strapi
-        .documents('api::article.article')
-        .create({
-          locale: 'en',
-          data: {
-            title,
-            slug: `source-${title.toLowerCase().replaceAll(' ', '-')}`,
-            createdBy: actorId,
-            updatedBy: actorId,
-          },
-        })
-    );
+  const source = z.object({ documentId: z.string() }).parse(
+    await strapi.documents('api::article.article').create({
+      locale: 'en',
+      data: {
+        title,
+        slug: `source-${title.toLowerCase().replaceAll(' ', '-')}`,
+        createdBy: actorId,
+        updatedBy: actorId,
+      },
+    })
+  );
   const queued = await runtime.enqueue(
     {
       contentType: 'api::article.article',
@@ -162,21 +158,17 @@ describe('native Strapi publication of translated UIDs', () => {
   });
   it('keeps native UID format and uniqueness enforcement active', async () => {
     const { strapi, actorId } = app();
-    const invalid = z
-      .object({ documentId: z.string() })
-      .parse(
-        await strapi
-          .documents('api::article.article')
-          .create({
-            locale: 'en',
-            data: {
-              title: 'Invalid UID control',
-              slug: 'غير-صالح',
-              createdBy: actorId,
-              updatedBy: actorId,
-            },
-          })
-      );
+    const invalid = z.object({ documentId: z.string() }).parse(
+      await strapi.documents('api::article.article').create({
+        locale: 'en',
+        data: {
+          title: 'Invalid UID control',
+          slug: 'غير-صالح',
+          createdBy: actorId,
+          updatedBy: actorId,
+        },
+      })
+    );
     await expect(
       strapi
         .documents('api::article.article')
@@ -185,6 +177,6 @@ describe('native Strapi publication of translated UIDs', () => {
     const duplicate = await translate('Duplicate Arabic interview', 'ar');
     await expect(
       strapi.documents('api::article.article').publish({ documentId: duplicate, locale: 'ar' })
-    ).rejects.toThrow();
+    ).rejects.toThrow(/unique/i);
   });
 });
