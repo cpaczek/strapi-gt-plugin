@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Box, Button, Flex, Typography } from '@strapi/design-system';
+import { PrimaryButton } from './PrimaryButton';
+import { Box, Flex, Typography } from '@strapi/design-system';
 import type {
   ContentTypeSettings,
   FieldRule,
@@ -9,7 +10,7 @@ import type {
 import { messages } from '../../../shared/messages';
 import { DEFAULT_CONTENT_TYPE_SETTINGS, DEFAULT_FIELD_RULE } from '../../../shared/constants';
 import { selectableFields } from '../fields';
-import { useText } from '../i18n';
+import { localeLabel, useText } from '../i18n';
 import { Notice, Section, SelectField, TextField, Toggle } from './Controls';
 
 export interface SettingsFormProps {
@@ -57,7 +58,7 @@ export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFor
   const selectedLocales = [settings.sourceLocale, ...settings.targetLocales];
   const localeOptions = response.locales.map((locale) => ({
     value: locale.code,
-    label: `${locale.name} (${locale.code})`,
+    label: localeLabel(locale),
   }));
   return (
     <form
@@ -108,7 +109,7 @@ export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFor
               .map((locale) => (
                 <Toggle
                   key={locale.code}
-                  label={`${locale.name} (${locale.code})`}
+                  label={localeLabel(locale)}
                   disabled={disabled}
                   checked={settings.targetLocales.includes(locale.code)}
                   onChange={(checked) =>
@@ -282,9 +283,9 @@ export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFor
         </Section>
         {canWrite && (
           <Flex justifyContent="flex-end">
-            <Button type="submit" loading={saving} disabled={saving}>
+            <PrimaryButton type="submit" loading={saving} disabled={saving}>
               {text('settings.save')}
-            </Button>
+            </PrimaryButton>
           </Flex>
         )}
       </Flex>

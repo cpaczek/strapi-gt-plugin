@@ -1,10 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { articlePath, isReaderLocale } from '../../lib/content';
-import { FeaturePlayground } from '../../lib/feature-playground';
-import { LanguageSwitch } from '../../lib/language-switch';
-import { contentReader, mediaUrl } from '../../lib/strapi';
+import { articlePath, isReaderLocale } from '../../../lib/content';
+import { FeaturePlayground } from '../../../lib/feature-playground';
+import { LanguageSwitch } from '../../../lib/language-switch';
+import { contentReader, mediaUrl } from '../../../lib/strapi';
 
 export default async function Home({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;

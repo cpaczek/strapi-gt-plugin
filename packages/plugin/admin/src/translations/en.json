@@ -34,7 +34,7 @@
   "settings.off": "Off",
   "settings.saveMode": "On source save",
   "settings.publishMode": "On source publish",
-  "settings.autoHint": "Automatic translation is off by default. It uses the configured targets and requires an authorized actor.",
+  "settings.autoHint": "Automatic translation is off by default. It uses the configured targets and requires an authorized editor.",
   "common.loading": "Loading translation information",
   "common.refresh": "Refresh",
   "common.retry": "Try again",
@@ -116,5 +116,6 @@
   "media.status.stale": "Source changed",
   "jobs.retryConsent": "I checked GT and accept retrying job {id}",
   "settings.connectedProject": "Connected project: {name} ({id})",
-  "settings.connectedLocales": "Project locales: {locales}"
+  "settings.connectedLocales": "Project locales: {locales}",
+  "translation.controls": "General Translation controls"
 }

@@ -144,7 +144,7 @@ export const FeaturePlayground = ({ locale }: { locale: string }) => {
         </div>
         <div className="lab-result">
           <span>Number formatting</span>
-          <output>{output.number}</output>
+          <output aria-label="Formatted number">{output.number}</output>
           <small>
             Decimal, compact, percent, or meters. A ratio of 0.5 is 50%. Units are formatted, not
             converted.

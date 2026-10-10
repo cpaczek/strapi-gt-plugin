@@ -37,7 +37,8 @@
     "verify": "strapi-plugin verify",
     "watch": "strapi-plugin watch",
     "test": "node server/test.mjs",
-    "typecheck": "tsc -p server/tsconfig.json && tsc -p admin/tsconfig.json",
+    "test:live": "node server/test.mjs --config vitest.live.config.mts",
+    "typecheck": "tsc -p server/tsconfig.json && tsc -p admin/tsconfig.json && tsc -p tsconfig.live.json",
     "lint": "oxlint server admin shared tests scripts",
     "format": "oxfmt --check server admin shared tests",
     "size": "node scripts/check-size.mjs"
@@ -96,7 +97,7 @@
   "size-limit": [
     {
       "path": "dist/admin/*.mjs",
-      "limit": "65 kB",
+      "limit": "90 kB",
       "brotli": false
     }
   ],

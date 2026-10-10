@@ -247,13 +247,24 @@ const register = ({ strapi }: { strapi: Core.Strapi }): void => {
         request.method === 'GET' &&
         routeInfo.type === 'content-api'
       ) {
-        const decorated = await runtime.media.decorate(result, schema, components, settings, true);
-        if (Array.isArray(result) && Array.isArray(decorated))
-          result.forEach((item, index) => {
-            const replacement: unknown = decorated[index];
-            if (objectRecord(item) && objectRecord(replacement)) Object.assign(item, replacement);
-          });
-        else if (objectRecord(result) && objectRecord(decorated)) Object.assign(result, decorated);
+        try {
+          const decorated = await runtime.media.decorate(
+            result,
+            schema,
+            components,
+            settings,
+            true
+          );
+          if (Array.isArray(result) && Array.isArray(decorated))
+            result.forEach((item, index) => {
+              const replacement: unknown = decorated[index];
+              if (objectRecord(item) && objectRecord(replacement)) Object.assign(item, replacement);
+            });
+          else if (objectRecord(result) && objectRecord(decorated))
+            Object.assign(result, decorated);
+        } catch {
+          strapi.log.warn(messages.mediaUnavailable().text);
+        }
       }
       return result;
     }

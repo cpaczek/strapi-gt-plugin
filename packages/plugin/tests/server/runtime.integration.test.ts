@@ -721,3 +721,404 @@ it('returns typed controller responses for translate, history, media, and retry'
   await controllers.retry(retry);
   expect(retry.status).toBe(400);
 });
+
+it('revokes queued writes when the actor role loses create permission', async () => {
+  await app().runtime.saveSettings(titleOnly());
+  const source = await freshSource();
+  const actorId = await limitedActor();
+  const id = await queue(source.documentId, false, actorId);
+  await app().runtime.worker.execute();
+  const restrictedActor = await limitedActor({ create: [] });
+  const restricted = z.object({ roles: z.array(z.object({ id: z.number() })) }).parse(
+    await app()
+      .strapi.db.query('admin::user')
+      .findOne({ where: { id: restrictedActor }, populate: ['roles'] })
+  );
+  await app()
+    .strapi.db.query('admin::user')
+    .update({ where: { id: actorId }, data: { roles: restricted.roles.map((role) => role.id) } });
+  expect(await finish(id)).toMatchObject({
+    status: 'failed',
+    error: { code: 'permission-denied' },
+  });
+  expect(await target(source.documentId)).toBeNull();
+});
+it('does not expose deleted source documents in job history', async () => {
+  const source = await freshSource();
+  await finish(await queue(source.documentId));
+  await app()
+    .strapi.documents('api::article.article')
+    .delete({ documentId: source.documentId, locale: 'en' });
+  const history = await app().runtime.history(app().actorId, {
+    page: 1,
+    contentType: 'api::article.article',
+    documentId: source.documentId,
+  });
+  expect(history.jobs).toEqual([]);
+});
+it('rejects retry after the failed job source or target changed', async () => {
+  const source = await freshSource();
+  const id = await queue(source.documentId);
+  app().mock.failNext({ status: 401 });
+  await finish(id);
+  await app()
+    .strapi.documents('api::article.article')
+    .update({ documentId: source.documentId, locale: 'en', data: { title: 'Changed later' } });
+  await expect(app().runtime.retry(id, app().actorId)).rejects.toMatchObject({
+    diagnostic: { code: 'stale-source' },
+  });
+  const other = await freshSource();
+  const second = await queue(other.documentId);
+  app().mock.failNext({ status: 401 });
+  await finish(second);
+  await app()
+    .strapi.documents('api::article.article')
+    .update({
+      documentId: other.documentId,
+      locale: 'fr',
+      data: { title: 'Human target appeared' },
+    });
+  await expect(app().runtime.retry(second, app().actorId)).rejects.toMatchObject({
+    diagnostic: { code: 'human-edit' },
+  });
+});
+it('rejects an unconfigured model and a deleted source before GT receives content', async () => {
+  await expect(
+    app().runtime.enqueue(
+      {
+        contentType: 'api::note.note',
+        documentIds: ['missing'],
+        targetLocales: ['fr'],
+        force: false,
+      },
+      app().actorId,
+      'translate'
+    )
+  ).rejects.toThrow();
+  await expect(queue('missing-document')).rejects.toThrow();
+});
+it('requires a server key and a configured project for connection checks', async () => {
+  const previous = process.env.GT_API_KEY;
+  delete process.env.GT_API_KEY;
+  try {
+    await expect(app().runtime.connection()).rejects.toMatchObject({
+      diagnostic: { code: 'missing-key' },
+    });
+    expect((await app().runtime.translationOptions()).configured).toBe(false);
+  } finally {
+    if (previous !== undefined) process.env.GT_API_KEY = previous;
+  }
+  await app().runtime.saveSettings({ ...app().settings, projectId: '' });
+  await expect(app().runtime.connection()).rejects.toMatchObject({
+    diagnostic: { code: 'validation' },
+  });
+});
+it('does not turn an all-human target into a silent success', async () => {
+  await app().runtime.saveSettings(titleOnly());
+  const source = await freshSource();
+  await app()
+    .strapi.documents('api::article.article')
+    .update({ documentId: source.documentId, locale: 'fr', data: { title: 'All human' } });
+  expect(await finish(await queue(source.documentId))).toMatchObject({
+    status: 'conflict',
+    error: { code: 'human-edit' },
+  });
+});
+it('accepts a bulk controller request but rejects duplicate documents and locales', async () => {
+  const first = await freshSource();
+  const second = await freshSource();
+  const controllers = plugin.controllers.translation({ strapi: app().strapi });
+  const ctx = context({
+    contentType: 'api::article.article',
+    documentIds: [first.documentId, second.documentId],
+    targetLocales: ['fr'],
+    force: false,
+  });
+  await controllers.bulk(ctx);
+  expect(z.object({ jobs: z.array(z.unknown()) }).parse(ctx.body).jobs).toHaveLength(2);
+  await expect(
+    app().runtime.enqueue(
+      {
+        contentType: 'api::article.article',
+        documentIds: [first.documentId, first.documentId],
+        targetLocales: ['fr'],
+        force: false,
+      },
+      app().actorId,
+      'bulkTranslate'
+    )
+  ).rejects.toThrow();
+  await expect(
+    app().runtime.enqueue(
+      {
+        contentType: 'api::article.article',
+        documentIds: [first.documentId],
+        targetLocales: ['fr', 'fr'],
+        force: false,
+      },
+      app().actorId,
+      'bulkTranslate'
+    )
+  ).rejects.toThrow();
+});
+it('rechecks ownership of an already active locale job', async () => {
+  await app().runtime.saveSettings(titleOnly());
+  const source = await freshSource();
+  await queue(source.documentId);
+  const other = await limitedActor();
+  await expect(queue(source.documentId, false, other)).rejects.toThrow();
+});
+it('handles non-draft media edits without publication leakage', async () => {
+  const { strapi, actorId, assetId } = app();
+  const source = z.object({ documentId: z.string() }).parse(
+    await strapi.documents('api::note.note').create({
+      locale: 'en',
+      data: { title: 'Live image', image: assetId, createdBy: actorId, updatedBy: actorId },
+    })
+  );
+  await app().runtime.saveSettings({
+    ...app().settings,
+    contentTypes: {
+      ...app().settings.contentTypes,
+      'api::note.note': {
+        fields: { title: { translate: true }, image: { translate: true } },
+        mediaMetadata: true,
+      },
+    },
+  });
+  const response = await app().runtime.mediaDocument(
+    'api::note.note',
+    source.documentId,
+    'en',
+    'draft',
+    actorId,
+    {
+      contentType: 'api::note.note',
+      documentId: source.documentId,
+      locale: 'en',
+      path: ['image'],
+      property: 'caption',
+      value: 'Live caption',
+      reset: false,
+    }
+  );
+  expect(response.draftAndPublish).toBe(false);
+  expect(
+    (await app().runtime.repository.state('api::note.note', source.documentId, 'en', 'published'))
+      .media[0]?.value
+  ).toBe('Live caption');
+});
+
+import { createPluginRuntime } from '../../server/src/runtime';
+import { MAX_JOBS_PER_REQUEST, MAX_ENQUEUE_BYTES } from '../../shared/constants';
+const makeDue = async (id: number) => {
+  const job = await app().runtime.repository.get(id);
+  if (!job) throw new Error('Missing saved job');
+  const now = new Date(0).toISOString();
+  await app()
+    .strapi.db.query('plugin::general-translation.job')
+    .update({ where: { id }, data: { nextRunAt: now, payload: { ...job, nextRunAt: now } } });
+};
+it('persists successful paid chunks and resumes only unfinished work after a rejection', async () => {
+  const { runtime, strapi, mock, settings } = app();
+  const source = await freshSource();
+  await strapi.documents('api::article.article').update({
+    documentId: source.documentId,
+    locale: 'en',
+    data: { summary: 'A detailed paragraph. '.repeat(1200) },
+  });
+  await runtime.saveSettings({
+    ...settings,
+    contentTypes: {
+      'api::article.article': {
+        ...settings.contentTypes['api::article.article']!,
+        fields: {
+          ...settings.contentTypes['api::article.article']!.fields,
+          summary: { translate: true, context: 'Editorial narrative' },
+        },
+      },
+    },
+  });
+  const id = await queue(source.documentId);
+  const start = mock.requests.length;
+  const persist = runtime.repository.saveProgress;
+  let checkpoints = 0;
+  runtime.repository.saveProgress = async (job, completed) => {
+    const saved = await persist(job, completed);
+    checkpoints += 1;
+    if (checkpoints === 1) mock.failNext({ status: 429 });
+    return saved;
+  };
+  try {
+    await runtime.worker.execute();
+  } finally {
+    runtime.repository.saveProgress = persist;
+  }
+  const waiting = await runtime.repository.get(id);
+  expect(waiting?.status).toBe('waiting');
+  expect(Object.keys(waiting?.runtimeProgress ?? {}).length).toBeGreaterThan(0);
+  expect(await target(source.documentId)).toBeNull();
+  const first = mock.requests.slice(start).find((request) => request.path === '/v2/translate');
+  if (!first) throw new Error('Missing first batch');
+  const successfulIds = Object.keys(
+    z.object({ requests: z.record(z.string(), z.unknown()) }).parse(first.body).requests
+  );
+  await makeDue(id);
+  const resumed = createPluginRuntime(strapi);
+  await resumed.worker.execute();
+  await resumed.worker.execute();
+  expect((await resumed.repository.get(id))?.status).toBe('succeeded');
+  const requestedIds = mock.requests
+    .slice(start)
+    .filter((request) => request.path === '/v2/translate')
+    .flatMap((request) =>
+      Object.keys(
+        z.object({ requests: z.record(z.string(), z.unknown()) }).parse(request.body).requests
+      )
+    );
+  for (const succeeded of successfulIds)
+    expect(requestedIds.filter((id) => id === succeeded)).toHaveLength(1);
+});
+it('stops further paid batches if a confirmed chunk cannot be checkpointed', async () => {
+  const { runtime, mock } = app();
+  const source = await freshSource();
+  const id = await queue(source.documentId);
+  const persist = runtime.repository.saveProgress;
+  const start = mock.requests.length;
+  runtime.repository.saveProgress = async () => false;
+  try {
+    await runtime.worker.execute();
+  } finally {
+    runtime.repository.saveProgress = persist;
+  }
+  expect(await runtime.repository.get(id)).toMatchObject({
+    status: 'failed',
+    error: { code: 'interrupted-request' },
+  });
+  expect(
+    mock.requests.slice(start).filter((request) => request.path === '/v2/translate')
+  ).toHaveLength(1);
+  expect(await target(source.documentId)).toBeNull();
+});
+it('does not automatically repeat a paid request after a gateway timeout', async () => {
+  const source = await freshSource();
+  const id = await queue(source.documentId);
+  const start = app().mock.requests.length;
+  app().mock.failNext({ status: 504 });
+  expect(await finish(id)).toMatchObject({
+    status: 'failed',
+    error: { code: 'interrupted-request' },
+  });
+  await app().runtime.worker.execute();
+  expect(
+    app()
+      .mock.requests.slice(start)
+      .filter((request) => request.path === '/v2/translate')
+  ).toHaveLength(1);
+});
+it('backs off a safe file-status read without losing exact remote identity', async () => {
+  const source = await freshSource();
+  await app()
+    .strapi.documents('api::article.article')
+    .update({
+      documentId: source.documentId,
+      locale: 'en',
+      data: { summary: 'A file paragraph. '.repeat(1200) },
+    });
+  const id = await queue(source.documentId);
+  expect((await app().runtime.repository.get(id))?.stage).toBe('upload');
+  await app().runtime.worker.execute();
+  await app().runtime.worker.execute();
+  const original = await app().runtime.repository.get(id);
+  app().mock.failNext({ status: 504 });
+  await app().runtime.worker.execute();
+  expect(await app().runtime.repository.get(id)).toMatchObject({
+    status: 'waiting',
+    stage: 'poll',
+    file: original?.file,
+  });
+  await makeDue(id);
+  expect((await finish(id)).status).toBe('succeeded');
+});
+it('rejects too many document-locale jobs before creating any queue records', async () => {
+  const source = await freshSource();
+  const request = {
+    contentType: 'api::article.article',
+    documentIds: Array.from({ length: MAX_JOBS_PER_REQUEST }, (_, index) =>
+      index ? `missing-${index}` : source.documentId
+    ),
+    targetLocales: ['fr', 'ar'],
+    force: false,
+  };
+  await expect(
+    app().runtime.enqueue(request, app().actorId, 'bulkTranslate')
+  ).rejects.toMatchObject({
+    diagnostic: { code: 'validation', details: { reason: expect.stringContaining('smaller') } },
+  });
+  expect(
+    (
+      await app().runtime.repository.list(app().actorId, {
+        page: 1,
+        contentType: 'api::article.article',
+        documentId: source.documentId,
+      })
+    ).total
+  ).toBe(0);
+});
+it('rejects oversized prepared batches without partially queueing them', async () => {
+  const source = await freshSource();
+  const available = await app().runtime.metadata();
+  const targets = available.supportedLocales
+    .filter((code) => !['en', 'fr', 'ar'].includes(code))
+    .slice(0, 20);
+  for (const code of targets)
+    await app()
+      .strapi.db.query('plugin::i18n.locale')
+      .create({ data: { code, name: code } });
+  await app().runtime.saveSettings({ ...app().settings, targetLocales: targets });
+  await app()
+    .strapi.documents('api::article.article')
+    .update({
+      documentId: source.documentId,
+      locale: 'en',
+      data: { summary: 'x'.repeat(Math.ceil(MAX_ENQUEUE_BYTES / targets.length / 2) + 1000) },
+    });
+  await expect(
+    app().runtime.enqueue(
+      {
+        contentType: 'api::article.article',
+        documentIds: [source.documentId],
+        targetLocales: targets,
+        force: false,
+      },
+      app().actorId,
+      'translate'
+    )
+  ).rejects.toMatchObject({
+    diagnostic: { code: 'validation', details: { reason: expect.stringContaining('smaller') } },
+  });
+  expect(
+    (await app().runtime.repository.list(app().actorId, { page: 1, documentId: source.documentId }))
+      .total
+  ).toBe(0);
+}, 30_000);
+
+it('accepts the exact document-locale job limit as one atomic batch', async () => {
+  const documents: string[] = [];
+  for (let index = 0; index < MAX_JOBS_PER_REQUEST / 2; index += 1)
+    documents.push((await freshSource()).documentId);
+  const before = app().mock.requests.length;
+  const response = await app().runtime.enqueue(
+    {
+      contentType: 'api::article.article',
+      documentIds: documents,
+      targetLocales: ['fr', 'ar'],
+      force: false,
+    },
+    app().actorId,
+    'bulkTranslate'
+  );
+  expect(response.jobs).toHaveLength(MAX_JOBS_PER_REQUEST);
+  expect(new Set(response.jobs.map((job) => job.id)).size).toBe(MAX_JOBS_PER_REQUEST);
+  expect(app().mock.requests).toHaveLength(before);
+}, 30_000);

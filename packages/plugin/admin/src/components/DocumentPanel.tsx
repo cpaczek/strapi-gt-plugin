@@ -5,7 +5,7 @@ import type { TranslationOptionsResponse } from '../../../shared/contracts';
 import { messages } from '../../../shared/messages';
 import { jobsSchema, mediaSchema } from '../api';
 import { useMutation, useResource } from '../hooks';
-import { useText } from '../i18n';
+import { localeLabel, useText } from '../i18n';
 import { Loading, Notice, SelectField } from './Controls';
 import { MediaEditor } from './MediaEditor';
 import { TranslationWorkspace } from './TranslationWorkspace';
@@ -89,7 +89,13 @@ export const DocumentPanel = ({
   const query = new URLSearchParams({ contentType: model, documentId, latestPerLocale: 'true' });
   const jobs = useResource(`/jobs?${query}`, jobsSchema, UI_POLL_MS);
   return (
-    <Flex direction="column" alignItems="stretch" gap={4}>
+    <Flex
+      tag="section"
+      aria-label={text('translation.controls')}
+      direction="column"
+      alignItems="stretch"
+      gap={4}
+    >
       {options.aiTranslationsEnabled && <Notice diagnostic={messages.aiConflict()} />}
       <Typography fontWeight="bold">{text('translation.latest')}</Typography>
       {jobs.loading && <Loading />}
@@ -139,7 +145,7 @@ export const DocumentPanel = ({
             value={locale}
             options={options.targetLocales.map((target) => ({
               value: target.code,
-              label: `${target.name} (${target.code})`,
+              label: localeLabel(target),
             }))}
             onChange={setLocale}
           />

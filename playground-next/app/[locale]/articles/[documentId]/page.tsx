@@ -3,7 +3,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Blocks, Markdown } from '../../../../lib/blocks';
-import { isReaderLocale } from '../../../../lib/content';
+import { articlePath, isReaderLocale, localeNames, readerLocales } from '../../../../lib/content';
 import { LanguageSwitch } from '../../../../lib/language-switch';
 import { contentReader, mediaUrl } from '../../../../lib/strapi';
 
@@ -18,7 +18,17 @@ export default async function ArticlePage({ params }: ArticleProps) {
   const { locale, documentId } = await params;
   if (!isReaderLocale(locale)) notFound();
   const article = await contentReader.get(documentId, locale);
-  if (!article)
+  if (!article) {
+    const alternatives = await Promise.all(
+      readerLocales
+        .filter((language) => language !== locale)
+        .map(async (language) => ({
+          language,
+          article: await contentReader.get(documentId, language),
+        }))
+    );
+    const available = alternatives.find((entry) => entry.article !== null);
+    if (!available) notFound();
     return (
       <main id="main" className="article-page">
         <div className="edition-row">
@@ -28,12 +38,13 @@ export default async function ArticlePage({ params }: ArticleProps) {
         <section className="empty">
           <h1>This story is not available in this language.</h1>
           <p>A translation will appear here after the editors publish it.</p>
-          <Link href={`/en/articles/${encodeURIComponent(documentId)}`}>
-            Read the English story
+          <Link href={articlePath(available.language, documentId)}>
+            Read in {localeNames[available.language]}
           </Link>
         </section>
       </main>
     );
+  }
   return (
     <main id="main" className="article-page">
       <div className="edition-row">

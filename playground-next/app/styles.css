@@ -1,13 +1,5 @@
 :root {
-  --paper: #f4f1e9;
-  --ink: #283b36;
-  --muted: #58665d;
-  --line: #c7cbbb;
-  --accent: #ab4934;
-  --serif: Georgia, 'Times New Roman', serif;
-  --sans: 'Trebuchet MS', Verdana, sans-serif;
   color: var(--ink);
-  background: var(--paper);
   font-family: var(--sans);
   font-size: 16px;
 }
@@ -70,18 +62,10 @@ h2 {
   align-items: center;
   gap: 2rem;
   padding-block: 32px 24px;
-  border-bottom: 1px solid var(--ink);
 }
 .wordmark {
-  font-family: var(--serif);
-  font-weight: bold;
-  font-size: 56px;
-  letter-spacing: -0.08em;
   text-decoration: none;
   line-height: 1;
-}
-.wordmark-dot {
-  color: var(--accent);
 }
 .masthead-note {
   font-size: 12px;
@@ -117,14 +101,9 @@ h2 {
   padding-bottom: 4px;
   border-bottom: 1px solid transparent;
 }
-.languages a[aria-current='page'] {
-  border-color: var(--ink);
-}
 .intro {
-  padding-block: 65px 80px;
   display: grid;
   grid-template-columns: 1.7fr 1fr;
-  gap: 0 4rem;
   align-items: end;
 }
 .eyebrow {
@@ -132,40 +111,29 @@ h2 {
   font-weight: bold;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent);
 }
 .intro > .eyebrow {
   grid-column: 1/-1;
 }
 .intro h1 {
-  font-size: clamp(42px, 5vw, 76px);
-  line-height: 1.06;
   margin: 20px 0 0;
 }
 .intro > p {
-  font-family: var(--serif);
-  font-size: 21px;
   color: var(--muted);
-  max-width: 300px;
   margin: 0 0 4px;
 }
 .story-grid {
   display: grid;
-  gap: 70px;
 }
 .feature-story {
   display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: clamp(24px, 4vw, 64px);
   align-items: center;
 }
 .story-image {
   overflow: hidden;
   display: block;
-  background: #ccd1bd;
 }
 .story-image img {
-  aspect-ratio: 1.32;
   object-fit: cover;
   transition: transform 0.5s ease;
 }
@@ -186,7 +154,6 @@ h2 {
   letter-spacing: 0.12em;
 }
 .story h2 {
-  font-size: clamp(34px, 3.8vw, 53px);
   line-height: 1.1;
   margin: 28px 0 22px;
 }
@@ -195,7 +162,6 @@ h2 {
 }
 .story-copy > p {
   color: var(--muted);
-  font-size: 14px;
   margin-bottom: 28px;
 }
 .story-meta {
@@ -216,7 +182,6 @@ h2 {
 }
 .closing-note {
   margin-block: 100px 70px;
-  padding-block: 36px;
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   align-items: end;
@@ -232,25 +197,17 @@ h2 {
   justify-self: end;
 }
 .closing-note p {
-  font-family: var(--serif);
-  font-size: 44px;
   line-height: 1.1;
   margin: 0;
-  letter-spacing: -0.04em;
 }
 .footer {
   padding-block: 24px 50px;
   display: flex;
-  align-items: center;
   gap: 28px;
   font-size: 10px;
   color: var(--muted);
 }
 .footer > a {
-  font-family: var(--serif);
-  font-size: 28px;
-  font-weight: bold;
-  letter-spacing: -0.07em;
   text-decoration: none;
 }
 .footer > span {
@@ -262,14 +219,12 @@ h2 {
   text-align: center;
 }
 .article-header h1 {
-  font-size: clamp(44px, 6vw, 84px);
   line-height: 1.03;
   margin-block: 24px;
 }
 .standfirst {
   font-family: var(--serif);
   font-size: 22px;
-  color: var(--muted);
   max-width: 640px;
   margin-inline: auto;
 }
@@ -293,10 +248,8 @@ figcaption {
   line-height: 1.5;
 }
 .article-body {
-  max-width: 690px;
   margin: 70px auto;
   font-family: var(--serif);
-  font-size: 20px;
   line-height: 1.7;
 }
 .article-body h2 {
@@ -313,7 +266,6 @@ figcaption {
 .article-body code {
   font-family: monospace;
   font-size: 0.8em;
-  background: #e8e8dc;
   padding: 2px 4px;
 }
 .article-body pre {
@@ -352,7 +304,6 @@ figcaption {
 .credits {
   display: flex;
   gap: 40px;
-  max-width: 690px;
   margin: 0 auto 100px;
   border-top: 1px solid var(--line);
   padding-top: 18px;
@@ -402,31 +353,14 @@ figcaption {
   .masthead {
     padding-block: 24px 20px;
   }
-  .wordmark {
-    font-size: 46px;
-  }
-  .issue {
-    font-size: 9px;
-  }
   .intro {
     display: block;
-    padding-block: 38px 50px;
-  }
-  .intro h1 {
-    font-size: 47px;
   }
   .intro > p {
     margin-top: 25px;
-    font-size: 19px;
-  }
-  .feature-story {
-    display: block;
   }
   .story-copy {
     margin-top: 28px;
-  }
-  .story h2 {
-    font-size: 42px;
   }
   .closing-note {
     margin-block: 60px 30px;
@@ -435,9 +369,6 @@ figcaption {
   }
   .closing-note > span:last-child {
     display: none;
-  }
-  .closing-note p {
-    font-size: 36px;
   }
   .footer {
     flex-wrap: wrap;
@@ -452,15 +383,11 @@ figcaption {
   .article-header {
     margin-top: 40px;
   }
-  .article-header h1 {
-    font-size: 48px;
-  }
   .standfirst {
     font-size: 20px;
   }
   .article-body {
     margin-top: 40px;
-    font-size: 19px;
   }
   .article-body .pull-quote {
     margin-inline: 0;
@@ -482,8 +409,6 @@ figcaption {
     transition: none !important;
   }
 }
-
-/* The zine uses original pixel shapes, with high-contrast reading surfaces. */
 :root {
   --paper: #121016;
   --ink: #f1ebfa;

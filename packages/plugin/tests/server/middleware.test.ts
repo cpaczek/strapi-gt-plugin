@@ -256,3 +256,20 @@ it('leaves unconfigured content types outside the middleware', async () => {
   ).toBe('original');
   expect(mocks.enqueue).not.toHaveBeenCalled();
 });
+
+it('falls back to shared media text when localized metadata cannot be validated', async () => {
+  mocks.decorate.mockRejectedValueOnce(new Error('Malformed saved metadata'));
+  const { middleware, log } = install({
+    method: 'GET',
+    state: { route: { info: { type: 'content-api' } } },
+  });
+  const original = { documentId: 'doc', image: { id: 1, caption: 'Shared caption' } };
+  expect(
+    await middleware(
+      { uid: 'api::article.article', action: 'findOne', params: {} },
+      async () => original
+    )
+  ).toBe(original);
+  expect(log).toHaveBeenCalledOnce();
+  expect(log).toHaveBeenCalledWith(expect.stringContaining('shared media text'));
+});

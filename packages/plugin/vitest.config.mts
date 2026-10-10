@@ -29,7 +29,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['server/src/**/*.ts', 'shared/**/*.ts'],
-      thresholds: { lines: 90, branches: 90 },
+      thresholds: {
+        lines: 90,
+        branches: 90,
+        'server/src/*.ts': { lines: 90, branches: 90 },
+        'server/src/engine/**/*.ts': { lines: 90, branches: 90 },
+      },
     },
   },
 });

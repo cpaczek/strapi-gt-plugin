@@ -59,7 +59,8 @@ beforeAll(async () => {
   const directories = await compileStrapi({ appDir: resolve(root, 'playground') });
   for (const event of process.eventNames())
     preservedListeners.set(event, process.rawListeners(event));
-  runtime.strapi = await createStrapi(directories).load();
+  runtime.strapi = createStrapi(directories);
+  await runtime.strapi.load();
 });
 afterAll(async () => {
   if (runtime.strapi) {
@@ -246,6 +247,40 @@ it('runs the durable translation with the initiating actor and records public GT
       .documents('api::article.article')
       .findOne({ documentId: source.documentId, locale: 'ar', status: 'published' })
   ).toBeNull();
+  const slug = z.object({ slug: z.string().min(1) }).parse(target).slug;
+  expect(slug).not.toBe('');
+  const publication = { observed: false };
+  const unsubscribe = app().eventHub.on('entry.publish', (payload: unknown) => {
+    const event = z
+      .object({
+        uid: z.string(),
+        entry: z.object({ documentId: z.string(), locale: z.string() }),
+      })
+      .safeParse(payload);
+    if (
+      event.success &&
+      event.data.uid === 'api::article.article' &&
+      event.data.entry.documentId === source.documentId &&
+      event.data.entry.locale === 'ar'
+    )
+      publication.observed = true;
+    return Promise.resolve();
+  });
+  try {
+    await app()
+      .documents('api::article.article')
+      .publish({ documentId: source.documentId, locale: 'ar' });
+    await expect.poll(() => publication.observed).toBe(true);
+  } finally {
+    unsubscribe();
+  }
+  expect(
+    articleRecord.parse(
+      await app()
+        .documents('api::article.article')
+        .findOne({ documentId: source.documentId, locale: 'ar', status: 'published' })
+    ).title
+  ).toBe(`[ar] ${source.title}`);
   expect(runtime.mock?.requests.some((request) => request.path === '/v2/translate')).toBe(true);
   expect(JSON.stringify(runtime.mock?.requests)).not.toContain('editor@example.invalid');
 });

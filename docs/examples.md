@@ -50,3 +50,19 @@ or perform currency conversion. See [GT's currency documentation](https://genera
 
 The mock-backed browser suite and a live GT language review answer different
 questions. Keep both results separate when reporting a demo.
+
+## Use your GT account
+
+Set `GT_API_KEY` and `GT_PROJECT_ID` in the ignored root `.env`, build the workspace,
+then run `pnpm demo:live`. Open Strapi at `http://127.0.0.1:1537/admin` and the reader
+at `http://127.0.0.1:3300/en`. This mode uses the real GT API and your account's
+translation allowance. Only the Strapi process receives the GT credentials.
+
+The live example has a separate persistent SQLite database under `.work/live-demo`.
+It does not alter the mock example's documents. Register a local editor, check the
+project and locale mapping in settings, then translate and publish an article.
+Per-field context explains the fan zine's slang; glossary terms remain unchanged.
+Compare the translated story with its source in the reader.
+
+Use `LIVE_STRAPI_PORT` and `LIVE_READER_PORT` to choose other ports. Stop the command
+with Ctrl+C. Saved articles remain available when you start it again.
