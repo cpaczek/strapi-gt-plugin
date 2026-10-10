@@ -162,3 +162,97 @@ describe('Document Service middleware authority', () => {
     expect(mocks.decorate).toHaveBeenCalledOnce();
   });
 });
+
+it('restores published overlays when a draft is discarded', async () => {
+  const { middleware } = install(adminRequest);
+  await middleware(
+    {
+      uid: 'api::article.article',
+      action: 'discardDraft',
+      params: { documentId: 'doc', locale: 'fr' },
+    },
+    async () => ({ documentId: 'doc', locale: 'fr' })
+  );
+  expect(mocks.state).toHaveBeenCalledWith('api::article.article', 'doc', 'fr', 'published');
+  expect(mocks.saveState).toHaveBeenCalledWith(
+    'api::article.article',
+    'doc',
+    'fr',
+    'draft',
+    expect.any(Object)
+  );
+});
+it('removes only published overlays on unpublish', async () => {
+  const { middleware } = install(adminRequest);
+  await middleware(
+    {
+      uid: 'api::article.article',
+      action: 'unpublish',
+      params: { documentId: 'doc', locale: 'fr' },
+    },
+    async () => ({ entries: [] })
+  );
+  expect(mocks.deleteState).toHaveBeenCalledWith('api::article.article', 'doc', 'fr', 'published');
+});
+it('removes both snapshots when a locale is deleted', async () => {
+  const { middleware } = install(adminRequest);
+  await middleware(
+    { uid: 'api::article.article', action: 'delete', params: { documentId: 'doc', locale: 'fr' } },
+    async () => ({ entries: [] })
+  );
+  expect(mocks.deleteState).toHaveBeenCalledWith('api::article.article', 'doc', 'fr');
+});
+it('uses published source content for automatic publication jobs', async () => {
+  mocks.savedSettings.mockResolvedValue({ ...settings, automaticMode: 'publish' });
+  const { middleware } = install(adminRequest);
+  await middleware(
+    { uid: 'api::article.article', action: 'publish', params: { documentId: 'doc', locale: 'en' } },
+    async () => ({ entries: [{ documentId: 'doc', locale: 'en' }] })
+  );
+  expect(mocks.enqueue).toHaveBeenCalledWith(expect.any(Object), 1, 'translate', 'published');
+});
+it('reports automatic enqueue errors without undoing a successful save', async () => {
+  mocks.enqueue.mockRejectedValueOnce(new Error('private-provider-key'));
+  const { middleware, log } = install(adminRequest);
+  const result = { documentId: 'doc', locale: 'en' };
+  expect(
+    await middleware(
+      { uid: 'api::article.article', action: 'update', params: {} },
+      async () => result
+    )
+  ).toBe(result);
+  expect(log).toHaveBeenCalledOnce();
+  expect(JSON.stringify(log.mock.calls)).not.toContain('private-provider-key');
+});
+it('decorates collection responses without changing their shape', async () => {
+  mocks.decorate.mockResolvedValueOnce([{ documentId: 'doc', caption: 'Localized' }]);
+  const { middleware } = install({
+    method: 'GET',
+    state: { route: { info: { type: 'content-api' } } },
+  });
+  const result = await middleware(
+    { uid: 'api::article.article', action: 'findMany', params: {} },
+    async () => [{ documentId: 'doc' }]
+  );
+  expect(result).toEqual([{ documentId: 'doc', caption: 'Localized' }]);
+});
+it('leaves unrelated plugin records outside the middleware', async () => {
+  const { middleware } = install(adminRequest);
+  expect(
+    await middleware(
+      { uid: 'plugin::upload.file', action: 'update', params: {} },
+      async () => 'original'
+    )
+  ).toBe('original');
+  expect(mocks.savedSettings).not.toHaveBeenCalled();
+});
+it('leaves unconfigured content types outside the middleware', async () => {
+  const { middleware } = install(adminRequest);
+  expect(
+    await middleware(
+      { uid: 'api::other.other', action: 'update', params: {} },
+      async () => 'original'
+    )
+  ).toBe('original');
+  expect(mocks.enqueue).not.toHaveBeenCalled();
+});
