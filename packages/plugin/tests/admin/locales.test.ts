@@ -41,6 +41,22 @@ describe('admin interface locales', () => {
     const [translation] = await plugin.registerTrads({ locales: [locale] });
     expect(translation?.data[`${PLUGIN_ID}.settings.save`]).toBe(english['settings.save']);
   });
+  it.each(['constructor', '__proto__', 'toString', ''])(
+    'safely falls back for an unknown locale %s',
+    async (locale) => {
+      const [translation] = await plugin.registerTrads({ locales: [locale] });
+      expect(translation?.data[`${PLUGIN_ID}.settings.save`]).toBe(english['settings.save']);
+    }
+  );
+  it('uses Arabic plural forms for zero, one, two, few, many and other', async () => {
+    const [translation] = await plugin.registerTrads({ locales: ['ar'] });
+    for (const key of ['translation.count', 'jobs.total']) {
+      for (const category of ['zero', 'one', 'two', 'few', 'many', 'other'])
+        expect(translation?.data[`${PLUGIN_ID}.${key}`]).toMatch(
+          new RegExp(`\\b${category}\\s*\\{`)
+        );
+    }
+  });
   it.each(['es', 'fr', 'ar'])(
     'renders ICU messages and interpolated values in %s',
     async (locale) => {
