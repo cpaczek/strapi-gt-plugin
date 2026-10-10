@@ -109,3 +109,72 @@ describe('edit hook path selection', () => {
     ).toHaveLength(1);
   });
 });
+
+describe('edit hook boundary cases', () => {
+  it('rejects a symlink into an excluded generated directory', async () => {
+    await mkdir(join(fixtureRoot, 'node_modules'));
+    await writeFile(join(fixtureRoot, 'node_modules', 'generated.ts'), 'const value=1;');
+    await symlink(join(fixtureRoot, 'node_modules', 'generated.ts'), join(fixtureRoot, 'alias.ts'));
+    expect(selectChangedFiles({ tool_input: { file_path: 'alias.ts' } }, fixtureRoot)).toEqual([]);
+  });
+  it('accepts a symlink to an ordinary source file in the same worktree', async () => {
+    await symlink(join(fixtureRoot, 'entry.ts'), join(fixtureRoot, 'alias.ts'));
+    expect(selectChangedFiles({ tool_input: { file_path: 'alias.ts' } }, fixtureRoot)).toHaveLength(
+      1
+    );
+  });
+  it('rejects directories even with a supported suffix', async () => {
+    await mkdir(join(fixtureRoot, 'directory.ts'));
+    expect(selectChangedFiles({ tool_input: { file_path: 'directory.ts' } }, fixtureRoot)).toEqual(
+      []
+    );
+  });
+  it('does not format nested credential snapshots', async () => {
+    await writeFile(join(fixtureRoot, '.env.backup.json'), '{}');
+    expect(
+      selectChangedFiles({ tool_input: { file_path: '.env.backup.json' } }, fixtureRoot)
+    ).toEqual([]);
+  });
+  it('treats shell punctuation as an ordinary filename', async () => {
+    const filename = 'entry;$(echo example).ts';
+    await writeFile(join(fixtureRoot, filename), 'const count=1;');
+    expect(selectChangedFiles({ tool_input: { file_path: filename } }, fixtureRoot)).toEqual([
+      join(fixtureRoot, filename),
+    ]);
+  });
+  it('handles several different files in one patch', () => {
+    expect(
+      selectChangedFiles(
+        { tool_input: { command: '*** Update File: entry.ts\n*** Add File: second.ts' } },
+        fixtureRoot
+      )
+    ).toHaveLength(2);
+  });
+  it('deduplicates absolute and relative spellings', () => {
+    expect(
+      selectChangedFiles(
+        {
+          tool_input: {
+            file_path: join(fixtureRoot, 'entry.ts'),
+            command: '*** Update File: entry.ts',
+          },
+        },
+        fixtureRoot
+      )
+    ).toHaveLength(1);
+  });
+  it('ignores nonstring input fields', () => {
+    expect(selectChangedFiles({ tool_input: { file_path: 12, command: [] } }, fixtureRoot)).toEqual(
+      []
+    );
+  });
+  it('ignores binary formats', async () => {
+    await writeFile(join(fixtureRoot, 'photo.png'), Buffer.from([0, 1, 2]));
+    expect(selectChangedFiles({ tool_input: { file_path: 'photo.png' } }, fixtureRoot)).toEqual([]);
+  });
+  it('does not read another event field as a file path', () => {
+    expect(selectChangedFiles({ tool_response: { file_path: 'entry.ts' } }, fixtureRoot)).toEqual(
+      []
+    );
+  });
+});

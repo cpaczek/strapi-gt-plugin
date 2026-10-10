@@ -16,3 +16,6 @@ test-results/
 *.tsbuildinfo
 *.log
 .DS_Store
+.next/
+.strapi/
+public/uploads/

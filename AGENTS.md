@@ -39,7 +39,7 @@ systems; use event handlers and derived state otherwise. Import defaults from
 packages/plugin/shared/constants.ts. Add new defaults there once.
 
 Default export exceptions: Strapi server and admin entrypoints; framework-mandated
-Strapi application config and lifecycle exports; Next.js page, layout, loading,
+Strapi application config, lifecycle, content API router, controller and service exports; Next.js page, layout, loading,
 error and not-found modules; tool configuration exports required by their loaders.
 Ordinary components, services and translation modules use named exports.
 
