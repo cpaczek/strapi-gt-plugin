@@ -1,3 +1,4 @@
+import { localizeDiagnostic } from '../../../shared/messages';
 import { useId, type ReactNode, type ChangeEvent } from 'react';
 import {
   Alert,
@@ -125,7 +126,7 @@ export const Notice = ({ diagnostic }: { diagnostic: Diagnostic }) => {
       variant={diagnostic.level === 'error' ? 'danger' : diagnostic.level}
       closeLabel={text('common.dismiss')}
     >
-      {diagnostic.text}
+      {localizeDiagnostic(diagnostic, text).text}
     </Alert>
   );
 };

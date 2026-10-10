@@ -1,0 +1,157 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`canonical diagnostic wording > keeps every existing English diagnostic byte-for-byte stable 1`] = `
+[
+  {
+    "code": "invalid-key",
+    "details": {},
+    "docs": "https://generaltranslation.com/docs",
+    "level": "error",
+    "text": "General Translation: GT rejected the API key. Set a valid GT_API_KEY on the Strapi server and restart it. Continue editing while an administrator updates the key. Documentation: https://generaltranslation.com/docs",
+  },
+  {
+    "code": "missing-key",
+    "details": {},
+    "docs": "https://generaltranslation.com/docs",
+    "level": "error",
+    "text": "General Translation: The GT connection is not configured. Set GT_API_KEY on the Strapi server and restart it. Documentation: https://generaltranslation.com/docs",
+  },
+  {
+    "code": "quota-exhausted",
+    "details": {},
+    "docs": "https://generaltranslation.com/docs",
+    "level": "error",
+    "text": "General Translation: GT paused translation because the account has no available credit. Review billing and spending limits in your GT account. Keep the existing translations until credit is available. Documentation: https://generaltranslation.com/docs",
+  },
+  {
+    "code": "permission-denied",
+    "details": {},
+    "level": "error",
+    "text": "General Translation: You do not have permission to translate this content. Ask an administrator for the required content and locale permissions.",
+  },
+  {
+    "code": "human-edit",
+    "details": {},
+    "level": "warning",
+    "text": "General Translation: A target field was edited after translation. Review the target content before choosing force retranslate. Keep the human edit.",
+  },
+  {
+    "code": "stale-source",
+    "details": {},
+    "level": "warning",
+    "text": "General Translation: The source changed while translation was running. Translate the latest saved source. The target content has been kept.",
+  },
+  {
+    "code": "ai-conflict",
+    "details": {},
+    "level": "warning",
+    "text": "General Translation: Strapi AI Translations is also enabled. Both translation systems can update the same locales. Choose one automatic translator for these content types.",
+  },
+  {
+    "code": "connection-success",
+    "details": {},
+    "level": "success",
+    "text": "General Translation: Connected to your GT project.",
+  },
+  {
+    "code": "admin-request-failure",
+    "details": {},
+    "level": "error",
+    "text": "General Translation: The translation screen could not complete the request. Retry the request after checking your connection. Keep editing the document and try again later.",
+  },
+  {
+    "code": "admin-incompatible",
+    "details": {},
+    "level": "error",
+    "text": "General Translation: The required Content Manager extension is unavailable. Use the Strapi version supported by this plugin and rebuild the admin panel.",
+  },
+  {
+    "code": "force-retranslate",
+    "details": {},
+    "level": "warning",
+    "text": "General Translation: Force retranslate can replace human edits in the selected locales. Review the target content before continuing. Keep the existing translations by cancelling.",
+  },
+  {
+    "code": "settings-saved",
+    "details": {},
+    "level": "success",
+    "text": "General Translation: Translation settings were saved.",
+  },
+  {
+    "code": "media-saved",
+    "details": {},
+    "level": "success",
+    "text": "General Translation: Localized media text was saved.",
+  },
+  {
+    "code": "interrupted-request",
+    "details": {},
+    "level": "error",
+    "text": "General Translation: The translation request ended before its result was saved. GT may already have accepted and billed this request. Check the job in GT before retrying. Keep the current content while you review the request.",
+  },
+  {
+    "code": "media-unavailable",
+    "details": {},
+    "level": "warning",
+    "text": "General Translation: Localized media text could not be loaded. Review the translation job and saved media metadata. The shared media text is shown.",
+  },
+  {
+    "code": "jobs-queued",
+    "details": {
+      "count": "3",
+    },
+    "level": "success",
+    "text": "General Translation: Translation jobs were queued. 3.",
+  },
+  {
+    "code": "unsupported-locale",
+    "details": {
+      "locale": "xx-ZZ",
+    },
+    "docs": "https://generaltranslation.com/docs",
+    "level": "error",
+    "text": "General Translation: The locale is not supported by GT. Select a supported locale or add an explicit locale mapping. xx-ZZ. Documentation: https://generaltranslation.com/docs",
+  },
+  {
+    "code": "network-failure",
+    "details": {
+      "reason": "Connection refused",
+    },
+    "level": "error",
+    "text": "General Translation: The GT request could not finish. Check the server network connection and retry the job. Connection refused.",
+  },
+  {
+    "code": "validation",
+    "details": {
+      "reason": "Select a content type",
+    },
+    "level": "error",
+    "text": "General Translation: The translation request is not valid. Correct the highlighted settings and try again. Select a content type.",
+  },
+  {
+    "code": "provider-failure",
+    "details": {
+      "reason": "Translation rejected",
+    },
+    "docs": "https://generaltranslation.com/docs",
+    "level": "error",
+    "text": "General Translation: GT could not translate the content. Review the job details and retry after correcting the cause. Translation rejected. Documentation: https://generaltranslation.com/docs",
+  },
+  {
+    "code": "missing-locale",
+    "details": {
+      "locale": "fr-CA",
+    },
+    "level": "error",
+    "text": "General Translation: The target locale does not exist for this document. Enable creation of missing locales and confirm your create permission. fr-CA.",
+  },
+  {
+    "code": "source-locale-mismatch",
+    "details": {
+      "locale": "en-US",
+    },
+    "level": "error",
+    "text": "General Translation: The GT project uses a different source locale. Select the matching GT project before uploading translation files. en-US.",
+  },
+]
+`;

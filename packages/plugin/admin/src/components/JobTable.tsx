@@ -1,3 +1,4 @@
+import { localizeDiagnostic } from '../../../shared/messages';
 import {
   Button,
   Box,
@@ -122,7 +123,11 @@ export const JobTable = ({
                   <Typography>
                     {text('jobs.stage', { stage: text(`stage.${job.stage}`), count: job.attempts })}
                   </Typography>
-                  {job.error && <Typography textColor="danger600">{job.error.text}</Typography>}
+                  {job.error && (
+                    <Typography textColor="danger600">
+                      {localizeDiagnostic(job.error, text).text}
+                    </Typography>
+                  )}
                   <Typography variant="pi" textColor="neutral600">
                     {formatDate(job.updatedAt, { dateStyle: 'medium', timeStyle: 'short' })}
                   </Typography>

@@ -1,5 +1,6 @@
 import { DOCS_URL, ERROR_DETAIL_LIMIT, MESSAGE_PREFIX } from './constants';
 import type { Diagnostic } from './contracts';
+import english from '../admin/src/translations/en.json';
 
 export interface MessageParts {
   code: string;
@@ -68,164 +69,233 @@ export const buildMessage = (parts: MessageParts): Diagnostic => {
   };
 };
 
+export type DiagnosticMessageKey = Extract<keyof typeof english, `diagnostic.${string}`>;
+export type DiagnosticTranslator = (key: DiagnosticMessageKey) => string | undefined;
+
+interface MessageDefinition {
+  code: string;
+  happened: DiagnosticMessageKey;
+  why?: DiagnosticMessageKey;
+  fix?: DiagnosticMessageKey;
+  fallback?: DiagnosticMessageKey;
+  level?: Diagnostic['level'];
+}
+
 const definitions = {
   invalidKey: {
     code: 'invalid-key',
-    happened: 'GT rejected the API key',
-    fix: 'Set a valid GT_API_KEY on the Strapi server and restart it',
-    fallback: 'Continue editing while an administrator updates the key',
+    happened: 'diagnostic.invalid-key.happened',
+    fix: 'diagnostic.invalid-key.fix',
+    fallback: 'diagnostic.invalid-key.fallback',
   },
   missingKey: {
     code: 'missing-key',
-    happened: 'The GT connection is not configured',
-    fix: 'Set GT_API_KEY on the Strapi server and restart it',
+    happened: 'diagnostic.missing-key.happened',
+    fix: 'diagnostic.missing-key.fix',
   },
   quotaExhausted: {
     code: 'quota-exhausted',
-    happened: 'GT paused translation because the account has no available credit',
-    fix: 'Review billing and spending limits in your GT account',
-    fallback: 'Keep the existing translations until credit is available',
+    happened: 'diagnostic.quota-exhausted.happened',
+    fix: 'diagnostic.quota-exhausted.fix',
+    fallback: 'diagnostic.quota-exhausted.fallback',
   },
   permissionDenied: {
     code: 'permission-denied',
-    happened: 'You do not have permission to translate this content',
-    fix: 'Ask an administrator for the required content and locale permissions',
+    happened: 'diagnostic.permission-denied.happened',
+    fix: 'diagnostic.permission-denied.fix',
   },
   humanEdit: {
     code: 'human-edit',
-    happened: 'A target field was edited after translation',
-    fix: 'Review the target content before choosing force retranslate',
-    fallback: 'Keep the human edit',
+    happened: 'diagnostic.human-edit.happened',
+    fix: 'diagnostic.human-edit.fix',
+    fallback: 'diagnostic.human-edit.fallback',
     level: 'warning',
   },
   staleSource: {
     code: 'stale-source',
-    happened: 'The source changed while translation was running',
-    fix: 'Translate the latest saved source',
-    fallback: 'The target content has been kept',
+    happened: 'diagnostic.stale-source.happened',
+    fix: 'diagnostic.stale-source.fix',
+    fallback: 'diagnostic.stale-source.fallback',
     level: 'warning',
   },
   aiConflict: {
     code: 'ai-conflict',
-    happened: 'Strapi AI Translations is also enabled',
-    why: 'Both translation systems can update the same locales',
-    fix: 'Choose one automatic translator for these content types',
+    happened: 'diagnostic.ai-conflict.happened',
+    why: 'diagnostic.ai-conflict.why',
+    fix: 'diagnostic.ai-conflict.fix',
     level: 'warning',
   },
   connectionSuccess: {
     code: 'connection-success',
-    happened: 'Connected to your GT project',
+    happened: 'diagnostic.connection-success.happened',
     level: 'success',
   },
   adminRequestFailure: {
     code: 'admin-request-failure',
-    happened: 'The translation screen could not complete the request',
-    fix: 'Retry the request after checking your connection',
-    fallback: 'Keep editing the document and try again later',
+    happened: 'diagnostic.admin-request-failure.happened',
+    fix: 'diagnostic.admin-request-failure.fix',
+    fallback: 'diagnostic.admin-request-failure.fallback',
   },
   adminIncompatible: {
     code: 'admin-incompatible',
-    happened: 'The required Content Manager extension is unavailable',
-    fix: 'Use the Strapi version supported by this plugin and rebuild the admin panel',
+    happened: 'diagnostic.admin-incompatible.happened',
+    fix: 'diagnostic.admin-incompatible.fix',
   },
   forceRetranslate: {
     code: 'force-retranslate',
-    happened: 'Force retranslate can replace human edits in the selected locales',
-    fix: 'Review the target content before continuing',
-    fallback: 'Keep the existing translations by cancelling',
+    happened: 'diagnostic.force-retranslate.happened',
+    fix: 'diagnostic.force-retranslate.fix',
+    fallback: 'diagnostic.force-retranslate.fallback',
     level: 'warning',
   },
   settingsSaved: {
     code: 'settings-saved',
-    happened: 'Translation settings were saved',
+    happened: 'diagnostic.settings-saved.happened',
     level: 'success',
   },
   mediaSaved: {
     code: 'media-saved',
-    happened: 'Localized media text was saved',
+    happened: 'diagnostic.media-saved.happened',
     level: 'success',
   },
   interruptedRequest: {
     code: 'interrupted-request',
-    happened: 'The translation request ended before its result was saved',
-    why: 'GT may already have accepted and billed this request',
-    fix: 'Check the job in GT before retrying',
-    fallback: 'Keep the current content while you review the request',
+    happened: 'diagnostic.interrupted-request.happened',
+    why: 'diagnostic.interrupted-request.why',
+    fix: 'diagnostic.interrupted-request.fix',
+    fallback: 'diagnostic.interrupted-request.fallback',
   },
   mediaUnavailable: {
     code: 'media-unavailable',
-    happened: 'Localized media text could not be loaded',
-    fix: 'Review the translation job and saved media metadata',
-    fallback: 'The shared media text is shown',
+    happened: 'diagnostic.media-unavailable.happened',
+    fix: 'diagnostic.media-unavailable.fix',
+    fallback: 'diagnostic.media-unavailable.fallback',
     level: 'warning',
   },
-} satisfies Record<string, MessageParts>;
+  jobsQueued: {
+    code: 'jobs-queued',
+    happened: 'diagnostic.jobs-queued.happened',
+    level: 'success',
+  },
+  unsupportedLocale: {
+    code: 'unsupported-locale',
+    happened: 'diagnostic.unsupported-locale.happened',
+    fix: 'diagnostic.unsupported-locale.fix',
+  },
+  networkFailure: {
+    code: 'network-failure',
+    happened: 'diagnostic.network-failure.happened',
+    fix: 'diagnostic.network-failure.fix',
+  },
+  validation: {
+    code: 'validation',
+    happened: 'diagnostic.validation.happened',
+    fix: 'diagnostic.validation.fix',
+  },
+  providerFailure: {
+    code: 'provider-failure',
+    happened: 'diagnostic.provider-failure.happened',
+    fix: 'diagnostic.provider-failure.fix',
+  },
+  missingLocale: {
+    code: 'missing-locale',
+    happened: 'diagnostic.missing-locale.happened',
+    fix: 'diagnostic.missing-locale.fix',
+  },
+  sourceLocaleMismatch: {
+    code: 'source-locale-mismatch',
+    happened: 'diagnostic.source-locale-mismatch.happened',
+    fix: 'diagnostic.source-locale-mismatch.fix',
+  },
+} satisfies Record<string, MessageDefinition>;
+
+const definitionParts = (
+  definition: MessageDefinition,
+  translate?: DiagnosticTranslator
+): MessageParts => {
+  const phrase = (key: DiagnosticMessageKey | undefined): string | undefined => {
+    if (!key) return undefined;
+    const translated = translate?.(key);
+    return translated?.trim() && translated !== key ? translated : english[key];
+  };
+  return {
+    code: definition.code,
+    happened: phrase(definition.happened) ?? english[definition.happened],
+    why: phrase(definition.why),
+    fix: phrase(definition.fix),
+    fallback: phrase(definition.fallback),
+    level: definition.level,
+  };
+};
+
+export const localizeDiagnostic = (
+  diagnostic: Diagnostic,
+  translate: DiagnosticTranslator
+): Diagnostic => {
+  // Transport codes are untrusted; matching values avoids inherited object keys.
+  const definition = Object.values(definitions).find((entry) => entry.code === diagnostic.code);
+  if (!definition) return diagnostic;
+  return buildMessage({
+    ...definitionParts(definition, translate),
+    code: diagnostic.code,
+    level: diagnostic.level,
+    details: diagnostic.details,
+    docs: diagnostic.docs,
+  });
+};
 
 export const messages = {
-  invalidKey: () => buildMessage({ ...definitions.invalidKey, docs: DOCS_URL }),
-  missingKey: () => buildMessage({ ...definitions.missingKey, docs: DOCS_URL }),
-  quotaExhausted: () => buildMessage({ ...definitions.quotaExhausted, docs: DOCS_URL }),
-  permissionDenied: () => buildMessage(definitions.permissionDenied),
-  humanEdit: () => buildMessage(definitions.humanEdit),
-  staleSource: () => buildMessage(definitions.staleSource),
-  aiConflict: () => buildMessage(definitions.aiConflict),
-  connectionSuccess: () => buildMessage(definitions.connectionSuccess),
-  adminRequestFailure: () => buildMessage(definitions.adminRequestFailure),
-  adminIncompatible: () => buildMessage(definitions.adminIncompatible),
-  forceRetranslate: () => buildMessage(definitions.forceRetranslate),
-  settingsSaved: () => buildMessage(definitions.settingsSaved),
-  mediaSaved: () => buildMessage(definitions.mediaSaved),
-  interruptedRequest: () => buildMessage(definitions.interruptedRequest),
-  mediaUnavailable: () => buildMessage(definitions.mediaUnavailable),
+  invalidKey: () => buildMessage({ ...definitionParts(definitions.invalidKey), docs: DOCS_URL }),
+  missingKey: () => buildMessage({ ...definitionParts(definitions.missingKey), docs: DOCS_URL }),
+  quotaExhausted: () =>
+    buildMessage({ ...definitionParts(definitions.quotaExhausted), docs: DOCS_URL }),
+  permissionDenied: () => buildMessage(definitionParts(definitions.permissionDenied)),
+  humanEdit: () => buildMessage(definitionParts(definitions.humanEdit)),
+  staleSource: () => buildMessage(definitionParts(definitions.staleSource)),
+  aiConflict: () => buildMessage(definitionParts(definitions.aiConflict)),
+  connectionSuccess: () => buildMessage(definitionParts(definitions.connectionSuccess)),
+  adminRequestFailure: () => buildMessage(definitionParts(definitions.adminRequestFailure)),
+  adminIncompatible: () => buildMessage(definitionParts(definitions.adminIncompatible)),
+  forceRetranslate: () => buildMessage(definitionParts(definitions.forceRetranslate)),
+  settingsSaved: () => buildMessage(definitionParts(definitions.settingsSaved)),
+  mediaSaved: () => buildMessage(definitionParts(definitions.mediaSaved)),
+  interruptedRequest: () => buildMessage(definitionParts(definitions.interruptedRequest)),
+  mediaUnavailable: () => buildMessage(definitionParts(definitions.mediaUnavailable)),
   jobsQueued: (count: number) =>
     buildMessage({
-      code: 'jobs-queued',
-      happened: 'Translation jobs were queued',
+      ...definitionParts(definitions.jobsQueued),
       details: { count: String(count) },
-      level: 'success',
     }),
   unsupportedLocale: (locale: string) =>
     buildMessage({
-      code: 'unsupported-locale',
-      happened: 'The locale is not supported by GT',
-      fix: 'Select a supported locale or add an explicit locale mapping',
+      ...definitionParts(definitions.unsupportedLocale),
       details: { locale },
       docs: DOCS_URL,
     }),
   networkFailure: (failure: unknown) =>
     buildMessage({
-      code: 'network-failure',
-      happened: 'The GT request could not finish',
-      fix: 'Check the server network connection and retry the job',
+      ...definitionParts(definitions.networkFailure),
       details: { reason: formatUnknownError(failure) },
     }),
   validation: (reason: string) =>
     buildMessage({
-      code: 'validation',
-      happened: 'The translation request is not valid',
-      fix: 'Correct the highlighted settings and try again',
+      ...definitionParts(definitions.validation),
       details: { reason },
     }),
   providerFailure: (failure: unknown) =>
     buildMessage({
-      code: 'provider-failure',
-      happened: 'GT could not translate the content',
-      fix: 'Review the job details and retry after correcting the cause',
+      ...definitionParts(definitions.providerFailure),
       details: { reason: formatUnknownError(failure) },
       docs: DOCS_URL,
     }),
   missingLocale: (locale: string) =>
     buildMessage({
-      code: 'missing-locale',
-      happened: 'The target locale does not exist for this document',
-      fix: 'Enable creation of missing locales and confirm your create permission',
+      ...definitionParts(definitions.missingLocale),
       details: { locale },
     }),
   sourceLocaleMismatch: (locale: string) =>
     buildMessage({
-      code: 'source-locale-mismatch',
-      happened: 'The GT project uses a different source locale',
-      fix: 'Select the matching GT project before uploading translation files',
+      ...definitionParts(definitions.sourceLocaleMismatch),
       details: { locale },
     }),
 };
