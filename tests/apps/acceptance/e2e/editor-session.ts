@@ -36,7 +36,13 @@ export const signIn = async (page: Page, supplied?: TestAccount): Promise<void> 
   await expect(page.getByRole('link', { name: /Content Manager/i })).toBeVisible();
 };
 export const openSettings = async (page: Page): Promise<void> => {
-  await page.goto(`${adminOrigin}/admin/settings/general-translation`);
+  await page.goto(`${adminOrigin}/admin`);
+  const settingsLink = page.getByRole('link', { name: 'Settings', exact: true });
+  await expect(settingsLink).toBeVisible();
+  await settingsLink.click();
+  const translationLink = page.getByRole('link', { name: 'General Translation', exact: true });
+  await expect(translationLink).toBeVisible();
+  await translationLink.click();
   await expect(
     page.getByRole('heading', { name: 'General Translation', exact: true })
   ).toBeVisible();
