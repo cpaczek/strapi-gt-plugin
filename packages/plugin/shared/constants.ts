@@ -1,4 +1,4 @@
-import type { PluginSettings } from './contracts';
+import type { ContentTypeSettings, FieldRule, PluginSettings } from './contracts';
 
 export const PLUGIN_ID = 'general-translation';
 export const MESSAGE_PREFIX = 'General Translation:';
@@ -26,6 +26,11 @@ export const SETTINGS_ACTION = 'settings';
 export const HTTP_BAD_REQUEST_STATUS = 400;
 export const PROJECT_ID_MAX_LENGTH = 200;
 export const DOCUMENT_ID_MAX_LENGTH = 200;
+export const DEFAULT_FIELD_RULE: FieldRule = { translate: true };
+export const DEFAULT_CONTENT_TYPE_SETTINGS: ContentTypeSettings = {
+  fields: {},
+  mediaMetadata: false,
+};
 export const PERMISSIONS = {
   readSettings: `plugin::${PLUGIN_ID}.read-settings`,
   writeSettings: `plugin::${PLUGIN_ID}.write-settings`,

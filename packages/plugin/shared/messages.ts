@@ -117,6 +117,34 @@ const definitions = {
     happened: 'Connected to your GT project',
     level: 'success',
   },
+  adminRequestFailure: {
+    code: 'admin-request-failure',
+    happened: 'The translation screen could not complete the request',
+    fix: 'Retry the request after checking your connection',
+    fallback: 'Keep editing the document and try again later',
+  },
+  adminIncompatible: {
+    code: 'admin-incompatible',
+    happened: 'The required Content Manager extension is unavailable',
+    fix: 'Use the Strapi version supported by this plugin and rebuild the admin panel',
+  },
+  forceRetranslate: {
+    code: 'force-retranslate',
+    happened: 'Force retranslate can replace human edits in the selected locales',
+    fix: 'Review the target content before continuing',
+    fallback: 'Keep the existing translations by cancelling',
+    level: 'warning',
+  },
+  settingsSaved: {
+    code: 'settings-saved',
+    happened: 'Translation settings were saved',
+    level: 'success',
+  },
+  mediaSaved: {
+    code: 'media-saved',
+    happened: 'Localized media text was saved',
+    level: 'success',
+  },
 } satisfies Record<string, MessageParts>;
 
 export const messages = {
@@ -128,6 +156,18 @@ export const messages = {
   staleSource: () => buildMessage(definitions.staleSource),
   aiConflict: () => buildMessage(definitions.aiConflict),
   connectionSuccess: () => buildMessage(definitions.connectionSuccess),
+  adminRequestFailure: () => buildMessage(definitions.adminRequestFailure),
+  adminIncompatible: () => buildMessage(definitions.adminIncompatible),
+  forceRetranslate: () => buildMessage(definitions.forceRetranslate),
+  settingsSaved: () => buildMessage(definitions.settingsSaved),
+  mediaSaved: () => buildMessage(definitions.mediaSaved),
+  jobsQueued: (count: number) =>
+    buildMessage({
+      code: 'jobs-queued',
+      happened: 'Translation jobs were queued',
+      details: { count: String(count) },
+      level: 'success',
+    }),
   unsupportedLocale: (locale: string) =>
     buildMessage({
       code: 'unsupported-locale',
