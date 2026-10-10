@@ -153,3 +153,30 @@ describe('prose edge cases', () => {
     expect(() => checkProse("const = 'robust';", 'broken.ts')).toThrow();
   });
 });
+
+describe('design system spacing tokens', () => {
+  const canonical = { RETRY_LIMIT: 5, WORKER_CONCURRENCY: 3 };
+  const filename = 'packages/plugin/admin/src/Panel.tsx';
+  it('allows the design system spacing scale in admin JSX', () => {
+    expect(
+      checkDefaultLiterals('const panel = <Flex gap={3} padding={5} />;', canonical, filename)
+    ).toEqual([]);
+  });
+  it('still rejects operation defaults in the same file', () => {
+    expect(
+      checkDefaultLiterals(
+        'const retries = 5; const panel = <Flex gap={3} />;',
+        canonical,
+        filename
+      )
+    ).toHaveLength(1);
+  });
+  it('does not exempt unrelated JSX properties or non-admin code', () => {
+    expect(
+      checkDefaultLiterals('const panel = <Task retries={5} />;', canonical, filename)
+    ).toHaveLength(1);
+    expect(
+      checkDefaultLiterals('const panel = <Flex gap={3} />;', canonical, 'server.tsx')
+    ).toHaveLength(1);
+  });
+});
