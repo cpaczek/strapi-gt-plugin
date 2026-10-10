@@ -1,0 +1,32 @@
+{
+  "name": "@gt/reader",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1 --port 3000",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1 --port 3000",
+    "test": "vitest run",
+    "typecheck": "next typegen && tsc --noEmit",
+    "lint": "oxlint app lib tests",
+    "format": "oxfmt --check ."
+  },
+  "dependencies": {
+    "mdast-util-from-markdown": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:next",
+    "react-dom": "catalog:next",
+    "server-only": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:next",
+    "@types/react-dom": "catalog:next",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
