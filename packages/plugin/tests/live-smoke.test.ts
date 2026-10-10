@@ -119,7 +119,7 @@ describe('opt-in live verification', () => {
     await expect(runLiveSmoke(environment, options)).rejects.toThrow('General Translation:');
     expect(client.download).not.toHaveBeenCalled();
   });
-  it.each([
+  it.each<Record<string, string>>([
     { title: '' },
     { extra: 'Unexpected' },
     { title: 'The Enderman fan club is meeting tonight.' },
