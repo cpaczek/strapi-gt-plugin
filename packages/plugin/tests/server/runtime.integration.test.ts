@@ -870,16 +870,12 @@ it('rechecks ownership of an already active locale job', async () => {
 });
 it('handles non-draft media edits without publication leakage', async () => {
   const { strapi, actorId, assetId } = app();
-  const source = z
-    .object({ documentId: z.string() })
-    .parse(
-      await strapi
-        .documents('api::note.note')
-        .create({
-          locale: 'en',
-          data: { title: 'Live image', image: assetId, createdBy: actorId, updatedBy: actorId },
-        })
-    );
+  const source = z.object({ documentId: z.string() }).parse(
+    await strapi.documents('api::note.note').create({
+      locale: 'en',
+      data: { title: 'Live image', image: assetId, createdBy: actorId, updatedBy: actorId },
+    })
+  );
   await app().runtime.saveSettings({
     ...app().settings,
     contentTypes: {
@@ -912,3 +908,199 @@ it('handles non-draft media edits without publication leakage', async () => {
       .media[0]?.value
   ).toBe('Live caption');
 });
+
+import { createPluginRuntime } from '../../server/src/runtime';
+import { MAX_JOBS_PER_REQUEST, MAX_ENQUEUE_BYTES } from '../../shared/constants';
+const makeDue = async (id: number) => {
+  const job = await app().runtime.repository.get(id);
+  if (!job) throw new Error('Missing saved job');
+  const now = new Date(0).toISOString();
+  await app()
+    .strapi.db.query('plugin::general-translation.job')
+    .update({ where: { id }, data: { nextRunAt: now, payload: { ...job, nextRunAt: now } } });
+};
+it('persists successful paid chunks and resumes only unfinished work after a rejection', async () => {
+  const { runtime, strapi, mock, settings } = app();
+  const source = await freshSource();
+  await strapi
+    .documents('api::article.article')
+    .update({
+      documentId: source.documentId,
+      locale: 'en',
+      data: { summary: 'A detailed paragraph. '.repeat(1200) },
+    });
+  await runtime.saveSettings({
+    ...settings,
+    contentTypes: {
+      'api::article.article': {
+        ...settings.contentTypes['api::article.article']!,
+        fields: {
+          ...settings.contentTypes['api::article.article']!.fields,
+          summary: { translate: true, context: 'Editorial narrative' },
+        },
+      },
+    },
+  });
+  const id = await queue(source.documentId);
+  const start = mock.requests.length;
+  const persist = runtime.repository.saveProgress;
+  let checkpoints = 0;
+  runtime.repository.saveProgress = async (job, completed) => {
+    const saved = await persist(job, completed);
+    checkpoints += 1;
+    if (checkpoints === 1) mock.failNext({ status: 429 });
+    return saved;
+  };
+  try {
+    await runtime.worker.execute();
+  } finally {
+    runtime.repository.saveProgress = persist;
+  }
+  const waiting = await runtime.repository.get(id);
+  expect(waiting?.status).toBe('waiting');
+  expect(Object.keys(waiting?.runtimeProgress ?? {}).length).toBeGreaterThan(0);
+  expect(await target(source.documentId)).toBeNull();
+  const first = mock.requests.slice(start).find((request) => request.path === '/v2/translate');
+  if (!first) throw new Error('Missing first batch');
+  const successfulIds = Object.keys(
+    z.object({ requests: z.record(z.string(), z.unknown()) }).parse(first.body).requests
+  );
+  await makeDue(id);
+  const resumed = createPluginRuntime(strapi);
+  await resumed.worker.execute();
+  await resumed.worker.execute();
+  expect((await resumed.repository.get(id))?.status).toBe('succeeded');
+  const requestedIds = mock.requests
+    .slice(start)
+    .filter((request) => request.path === '/v2/translate')
+    .flatMap((request) =>
+      Object.keys(
+        z.object({ requests: z.record(z.string(), z.unknown()) }).parse(request.body).requests
+      )
+    );
+  for (const succeeded of successfulIds)
+    expect(requestedIds.filter((id) => id === succeeded)).toHaveLength(1);
+});
+it('stops further paid batches if a confirmed chunk cannot be checkpointed', async () => {
+  const { runtime, mock } = app();
+  const source = await freshSource();
+  const id = await queue(source.documentId);
+  const persist = runtime.repository.saveProgress;
+  const start = mock.requests.length;
+  runtime.repository.saveProgress = async () => false;
+  try {
+    await runtime.worker.execute();
+  } finally {
+    runtime.repository.saveProgress = persist;
+  }
+  expect(await runtime.repository.get(id)).toMatchObject({
+    status: 'failed',
+    error: { code: 'interrupted-request' },
+  });
+  expect(
+    mock.requests.slice(start).filter((request) => request.path === '/v2/translate')
+  ).toHaveLength(1);
+  expect(await target(source.documentId)).toBeNull();
+});
+it('does not automatically repeat a paid request after a gateway timeout', async () => {
+  const source = await freshSource();
+  const id = await queue(source.documentId);
+  const start = app().mock.requests.length;
+  app().mock.failNext({ status: 504 });
+  expect(await finish(id)).toMatchObject({
+    status: 'failed',
+    error: { code: 'interrupted-request' },
+  });
+  await app().runtime.worker.execute();
+  expect(
+    app()
+      .mock.requests.slice(start)
+      .filter((request) => request.path === '/v2/translate')
+  ).toHaveLength(1);
+});
+it('backs off a safe file-status read without losing exact remote identity', async () => {
+  const source = await freshSource();
+  await app()
+    .strapi.documents('api::article.article')
+    .update({
+      documentId: source.documentId,
+      locale: 'en',
+      data: { summary: 'A file paragraph. '.repeat(1200) },
+    });
+  const id = await queue(source.documentId);
+  expect((await app().runtime.repository.get(id))?.stage).toBe('upload');
+  await app().runtime.worker.execute();
+  await app().runtime.worker.execute();
+  const original = await app().runtime.repository.get(id);
+  app().mock.failNext({ status: 504 });
+  await app().runtime.worker.execute();
+  expect(await app().runtime.repository.get(id)).toMatchObject({
+    status: 'waiting',
+    stage: 'poll',
+    file: original?.file,
+  });
+  await makeDue(id);
+  expect((await finish(id)).status).toBe('succeeded');
+});
+it('rejects too many document-locale jobs before creating any queue records', async () => {
+  const source = await freshSource();
+  const request = {
+    contentType: 'api::article.article',
+    documentIds: Array.from({ length: MAX_JOBS_PER_REQUEST }, (_, index) =>
+      index ? `missing-${index}` : source.documentId
+    ),
+    targetLocales: ['fr', 'ar'],
+    force: false,
+  };
+  await expect(
+    app().runtime.enqueue(request, app().actorId, 'bulkTranslate')
+  ).rejects.toMatchObject({
+    diagnostic: { code: 'validation', details: { reason: expect.stringContaining('smaller') } },
+  });
+  expect(
+    (
+      await app().runtime.repository.list(app().actorId, {
+        page: 1,
+        contentType: 'api::article.article',
+        documentId: source.documentId,
+      })
+    ).total
+  ).toBe(0);
+});
+it('rejects oversized prepared batches without partially queueing them', async () => {
+  const source = await freshSource();
+  const available = await app().runtime.metadata();
+  const targets = available.supportedLocales
+    .filter((code) => !['en', 'fr', 'ar'].includes(code))
+    .slice(0, 20);
+  for (const code of targets)
+    await app()
+      .strapi.db.query('plugin::i18n.locale')
+      .create({ data: { code, name: code } });
+  await app().runtime.saveSettings({ ...app().settings, targetLocales: targets });
+  await app()
+    .strapi.documents('api::article.article')
+    .update({
+      documentId: source.documentId,
+      locale: 'en',
+      data: { summary: 'x'.repeat(Math.ceil(MAX_ENQUEUE_BYTES / targets.length / 2) + 1000) },
+    });
+  await expect(
+    app().runtime.enqueue(
+      {
+        contentType: 'api::article.article',
+        documentIds: [source.documentId],
+        targetLocales: targets,
+        force: false,
+      },
+      app().actorId,
+      'translate'
+    )
+  ).rejects.toMatchObject({
+    diagnostic: { code: 'validation', details: { reason: expect.stringContaining('smaller') } },
+  });
+  expect(
+    (await app().runtime.repository.list(app().actorId, { page: 1, documentId: source.documentId }))
+      .total
+  ).toBe(0);
+}, 30_000);
