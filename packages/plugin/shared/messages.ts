@@ -13,16 +13,21 @@ export interface MessageParts {
 }
 
 export const formatUnknownError = (failure: unknown): string => {
-  const descriptor =
-    typeof failure === 'object' && failure !== null
-      ? Object.getOwnPropertyDescriptor(failure, 'message')
-      : undefined;
-  const raw =
-    typeof failure === 'string'
-      ? failure
-      : descriptor && 'value' in descriptor && typeof descriptor.value === 'string'
-        ? descriptor.value
-        : 'The service did not provide a safe error description';
+  const raw = (() => {
+    if (typeof failure === 'string') return failure;
+    if (typeof failure === 'object' && failure !== null) {
+      try {
+        const descriptor = Object.getOwnPropertyDescriptor(failure, 'message');
+        if (descriptor && 'value' in descriptor && typeof descriptor.value === 'string') {
+          return descriptor.value;
+        }
+      } catch {
+        // Untrusted proxy traps cannot prevent an actionable error response.
+        return 'The failure could not be inspected safely';
+      }
+    }
+    return 'The service did not provide a safe error description';
+  })();
   return (
     raw
       .replace(/gtx-[\w-]+/gi, '[redacted]')

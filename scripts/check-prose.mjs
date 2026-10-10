@@ -18,7 +18,10 @@ const proseFragments = (source, filename) => {
   walkSyntax(parsed.program, (node) => {
     if ((node.type === 'Literal' || node.type === 'JSXText') && typeof node.value === 'string')
       fragments.push(node.value);
-    if (node.type === 'TemplateElement') fragments.push(node.value.cooked ?? node.value.raw);
+    if (node.type === 'TemplateLiteral')
+      fragments.push(
+        node.quasis.map((part) => part.value.cooked ?? part.value.raw).join(' {value} ')
+      );
   });
   return fragments;
 };
@@ -34,7 +37,7 @@ export const checkProse = (source, filename) => {
     }
     if (/\bnot only\b[\s\S]*?\bbut also\b/i.test(fragment))
       findings.push(`Remove the paired contrast at ${filename}`);
-    for (const heading of fragment.matchAll(/^#{1,6}\s+.*$/gm)) {
+    for (const heading of fragment.matchAll(/^ {0,3}#{1,6}\s+.*$/gm)) {
       if (/\p{Extended_Pictographic}/u.test(heading[0]))
         findings.push(`Remove heading decoration at ${filename}`);
     }

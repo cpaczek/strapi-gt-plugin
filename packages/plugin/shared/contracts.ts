@@ -227,3 +227,26 @@ export interface ConnectionResponse {
 export interface FailureResponse {
   error: Diagnostic;
 }
+
+export type MediaProperty = 'alternativeText' | 'caption';
+export interface MediaOverlayItem {
+  path: FieldPath;
+  assetId: string;
+  property: MediaProperty;
+  source: string | null;
+  value: string | null;
+  status: 'source' | 'translated' | 'manual' | 'stale';
+}
+export interface MediaOverlayResponse {
+  items: MediaOverlayItem[];
+  draftAndPublish: boolean;
+}
+export interface MediaOverlayRequest {
+  contentType: string;
+  documentId: string;
+  locale: string;
+  path: FieldPath;
+  property: MediaProperty;
+  value: string | null;
+  reset: boolean;
+}

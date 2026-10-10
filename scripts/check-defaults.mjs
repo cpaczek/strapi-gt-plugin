@@ -9,7 +9,11 @@ export const checkDefaultLiterals = (source, canonical, filename) => {
   const values = new Map(Object.entries(canonical).map(([name, value]) => [value, name]));
   const findings = [];
   walkSyntax(parseSyntax(source, filename).program, (node, parent) => {
-    const value = literalValue(node);
+    const literal = literalValue(node);
+    const value =
+      parent?.type === 'UnaryExpression' && parent.operator === '-' && typeof literal === 'number'
+        ? -literal
+        : literal;
     if (value !== undefined && values.has(value) && parent?.type !== 'TSLiteralType') {
       const line = source.slice(0, node.start).split('\n').length;
       findings.push(

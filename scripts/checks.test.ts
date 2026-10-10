@@ -68,3 +68,88 @@ describe('prose policy', () => {
     expect(checkProse('A robust output.', 'product-fixture.md')).toHaveLength(1);
   });
 });
+
+describe('defaults edge cases', () => {
+  const canonical = { TIMEOUT: 30_000, ENDPOINT: 'https://api.gtx.dev' };
+  it('recognizes hexadecimal numeric spelling', () => {
+    expect(checkDefaultLiterals('const timeout = 0x7530;', canonical, 'hex.ts')).toHaveLength(1);
+  });
+  it('recognizes escaped URL spelling', () => {
+    expect(
+      checkDefaultLiterals(
+        "const endpoint = 'https:\\u002f\\u002fapi.gtx.dev';",
+        canonical,
+        'escaped.ts'
+      )
+    ).toHaveLength(1);
+  });
+  it('allows a different signed value', () => {
+    expect(checkDefaultLiterals('const offset = -30000;', canonical, 'signed.ts')).toEqual([]);
+  });
+  it('allows literal contract types', () => {
+    expect(checkDefaultLiterals('type Allowed = 30000;', canonical, 'types.ts')).toEqual([]);
+  });
+  it('checks a value inside a nested object', () => {
+    expect(
+      checkDefaultLiterals(
+        'const config = { request: { timeout: 30000 } };',
+        canonical,
+        'nested.ts'
+      )
+    ).toHaveLength(1);
+  });
+  it('checks JSX attribute expressions', () => {
+    expect(
+      checkDefaultLiterals('const field = <Input delay={30000} />;', canonical, 'field.tsx')
+    ).toHaveLength(1);
+  });
+  it('ignores a regex pattern', () => {
+    expect(checkDefaultLiterals('const pattern = /30000/;', canonical, 'regex.ts')).toEqual([]);
+  });
+  it('rejects invalid syntax instead of reporting a clean file', () => {
+    expect(() => checkDefaultLiterals('const = ;', canonical, 'broken.ts')).toThrow();
+  });
+  it('reports distinct duplicated values separately', () => {
+    expect(
+      checkDefaultLiterals("const config = [30000, 'https://api.gtx.dev'];", canonical, 'both.ts')
+    ).toHaveLength(2);
+  });
+  it('allows bigint values with different semantics', () => {
+    expect(checkDefaultLiterals('const large = 30000n;', canonical, 'bigint.ts')).toEqual([]);
+  });
+});
+
+describe('prose edge cases', () => {
+  it('checks JSX text', () => {
+    expect(checkProse('const panel = <p>A robust setup.</p>;', 'panel.tsx')).toHaveLength(1);
+  });
+  it('checks escaped punctuation in UI strings', () => {
+    expect(checkProse("const label = 'Go \\u2014 now';", 'label.ts')).toHaveLength(1);
+  });
+  it('checks template fragments', () => {
+    expect(checkProse('const label = `A robust ${name}`;', 'label.ts')).toHaveLength(1);
+  });
+  it('checks paired contrast across template substitutions', () => {
+    expect(
+      checkProse('const label = `Not only ${first} but also ${second}`;', 'label.ts')
+    ).toHaveLength(1);
+  });
+  it('checks slightly indented markdown headings', () => {
+    expect(checkProse('  ## Install \u{1F680}', 'README.md')).toHaveLength(1);
+  });
+  it('does not ban emoji in an ordinary quoted example', () => {
+    expect(checkProse('An example icon is \u{1F680}.', 'README.md')).toEqual([]);
+  });
+  it('does not treat code regex syntax as prose', () => {
+    expect(checkProse('const pattern = /robust/;', 'pattern.ts')).toEqual([]);
+  });
+  it('checks adjacent prohibited phrases independently', () => {
+    expect(checkProse('Moreover, seamless and effortless.', 'README.md')).toHaveLength(3);
+  });
+  it('keeps apostrophes in the phrase matcher', () => {
+    expect(checkProse("In today's example, use a file.", 'README.md')).toHaveLength(1);
+  });
+  it('fails on malformed code instead of dropping its strings', () => {
+    expect(() => checkProse("const = 'robust';", 'broken.ts')).toThrow();
+  });
+});
