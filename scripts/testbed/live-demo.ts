@@ -106,7 +106,7 @@ const run = async (): Promise<void> => {
     if (state.closing) return;
     state.closing = true;
     for (const child of children) {
-      if (child.pid && child.exitCode === null) {
+      if (child.pid && child.exitCode === null && child.signalCode === null) {
         try {
           process.kill(-child.pid, 'SIGTERM');
         } catch (failure) {
@@ -117,7 +117,9 @@ const run = async (): Promise<void> => {
     }
     await Promise.all(
       children.map((child) =>
-        child.pid && child.exitCode === null ? once(child, 'exit') : Promise.resolve()
+        child.pid && child.exitCode === null && child.signalCode === null
+          ? once(child, 'exit')
+          : Promise.resolve()
       )
     );
     process.exitCode = code;
