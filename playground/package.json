@@ -9,7 +9,7 @@
     "dev": "node ../scripts/testbed/strapi-command.mjs develop",
     "start": "node ../scripts/testbed/strapi-command.mjs start",
     "strapi": "node ../scripts/testbed/strapi-command.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p src/admin/tsconfig.json",
     "lint": "oxlint config src",
     "format": "oxfmt --check config src"
   },

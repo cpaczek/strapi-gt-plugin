@@ -451,74 +451,60 @@ const limitedActor = async (
 ) => {
   roleSequence += 1;
   const strapi = app().strapi;
-  const role = z
-    .object({ id: z.number() })
-    .parse(
-      await strapi.db
-        .query('admin::role')
-        .create({
-          data: {
-            name: `Server role ${roleSequence}`,
-            code: `server-role-${roleSequence}`,
-            description: 'Fixture role',
-          },
-        })
-    );
+  const role = z.object({ id: z.number() }).parse(
+    await strapi.db.query('admin::role').create({
+      data: {
+        name: `Server role ${roleSequence}`,
+        code: `server-role-${roleSequence}`,
+        description: 'Fixture role',
+      },
+    })
+  );
   if (options.plugin !== false)
-    await strapi.db
-      .query('admin::permission')
-      .create({
-        data: {
-          role: role.id,
-          action: PERMISSIONS.translate,
-          subject: null,
-          properties: {},
-          conditions: [],
-        },
-      });
+    await strapi.db.query('admin::permission').create({
+      data: {
+        role: role.id,
+        action: PERMISSIONS.translate,
+        subject: null,
+        properties: {},
+        conditions: [],
+      },
+    });
   for (const action of ['read', 'create', 'update'] as const) {
     const fields = options[action] ?? ['title'];
     const locales =
       action === 'read' ? (options.readLocales ?? ['en', 'fr']) : (options.createLocales ?? ['fr']);
-    await strapi.db
-      .query('admin::permission')
-      .create({
-        data: {
-          role: role.id,
-          action: `plugin::content-manager.explorer.${action}`,
-          subject: 'api::article.article',
-          properties: { fields, locales },
-          conditions: [],
-        },
-      });
+    await strapi.db.query('admin::permission').create({
+      data: {
+        role: role.id,
+        action: `plugin::content-manager.explorer.${action}`,
+        subject: 'api::article.article',
+        properties: { fields, locales },
+        conditions: [],
+      },
+    });
   }
   if (options.publish)
-    await strapi.db
-      .query('admin::permission')
-      .create({
-        data: {
-          role: role.id,
-          action: 'plugin::content-manager.explorer.publish',
-          subject: 'api::article.article',
-          properties: { locales: ['fr'] },
-          conditions: [],
-        },
-      });
-  const actor = z
-    .object({ id: z.number() })
-    .parse(
-      await strapi.db
-        .query('admin::user')
-        .create({
-          data: {
-            firstname: 'Limited',
-            lastname: 'Editor',
-            email: `limited-${roleSequence}@example.invalid`,
-            isActive: true,
-            roles: [role.id],
-          },
-        })
-    );
+    await strapi.db.query('admin::permission').create({
+      data: {
+        role: role.id,
+        action: 'plugin::content-manager.explorer.publish',
+        subject: 'api::article.article',
+        properties: { locales: ['fr'] },
+        conditions: [],
+      },
+    });
+  const actor = z.object({ id: z.number() }).parse(
+    await strapi.db.query('admin::user').create({
+      data: {
+        firstname: 'Limited',
+        lastname: 'Editor',
+        email: `limited-${roleSequence}@example.invalid`,
+        isActive: true,
+        roles: [role.id],
+      },
+    })
+  );
   return actor.id;
 };
 const titleOnly = () => ({
@@ -617,14 +603,12 @@ it('translates nested components and dynamic zones using real permission subject
   );
   const id = await queue(source.documentId);
   expect(await finish(id)).toMatchObject({ status: 'succeeded' });
-  const translated: unknown = await strapi
-    .documents('api::article.article')
-    .findOne({
-      documentId: source.documentId,
-      locale: 'fr',
-      status: 'draft',
-      populate: { card: true, cards: true, sections: true },
-    });
+  const translated: unknown = await strapi.documents('api::article.article').findOne({
+    documentId: source.documentId,
+    locale: 'fr',
+    status: 'draft',
+    populate: { card: true, cards: true, sections: true },
+  });
   expect(translated).toMatchObject({
     card: { title: '[fr] Single card', count: 5 },
     cards: [{ title: '[fr] First card' }, { title: '[fr] Second card' }],
@@ -656,16 +640,12 @@ it('keeps no-op source checks local without calling GT again', async () => {
 });
 it('writes translations immediately for content types without drafts', async () => {
   const { strapi, actorId } = app();
-  const source = z
-    .object({ documentId: z.string() })
-    .parse(
-      await strapi
-        .documents('api::note.note')
-        .create({
-          locale: 'en',
-          data: { title: 'Live note', createdBy: actorId, updatedBy: actorId },
-        })
-    );
+  const source = z.object({ documentId: z.string() }).parse(
+    await strapi.documents('api::note.note').create({
+      locale: 'en',
+      data: { title: 'Live note', createdBy: actorId, updatedBy: actorId },
+    })
+  );
   await app().runtime.saveSettings({
     ...app().settings,
     contentTypes: {
