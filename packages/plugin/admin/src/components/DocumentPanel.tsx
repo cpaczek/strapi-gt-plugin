@@ -89,7 +89,13 @@ export const DocumentPanel = ({
   const query = new URLSearchParams({ contentType: model, documentId, latestPerLocale: 'true' });
   const jobs = useResource(`/jobs?${query}`, jobsSchema, UI_POLL_MS);
   return (
-    <Flex direction="column" alignItems="stretch" gap={4}>
+    <Flex
+      tag="section"
+      aria-label={text('translation.controls')}
+      direction="column"
+      alignItems="stretch"
+      gap={4}
+    >
       {options.aiTranslationsEnabled && <Notice diagnostic={messages.aiConflict()} />}
       <Typography fontWeight="bold">{text('translation.latest')}</Typography>
       {jobs.loading && <Loading />}
