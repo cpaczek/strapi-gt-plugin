@@ -162,7 +162,6 @@ export const createRepository = (strapi: PersistenceHost) => {
       return { jobs: z.array(z.unknown()).parse(rows).map(decode), total: z.number().parse(total) };
     },
     async latest(
-      actorId: number,
       contentType: string,
       documentId: string,
       targetLocales: string[]
@@ -170,7 +169,7 @@ export const createRepository = (strapi: PersistenceHost) => {
       const records = await Promise.all(
         targetLocales.map(async (targetLocale) => {
           const row: unknown = await strapi.db.query(jobUid).findOne({
-            where: { actorId, contentType, entryDocumentId: documentId, targetLocale },
+            where: { contentType, entryDocumentId: documentId, targetLocale },
             orderBy: { id: 'desc' },
           });
           return row ? decode(row) : null;
