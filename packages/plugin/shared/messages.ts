@@ -145,6 +145,13 @@ const definitions = {
     happened: 'Localized media text was saved',
     level: 'success',
   },
+  interruptedRequest: {
+    code: 'interrupted-request',
+    happened: 'The worker stopped before a GT request result was saved',
+    why: 'GT may already have accepted and billed this request',
+    fix: 'Check the job in GT before retrying',
+    fallback: 'Keep the current content while you review the request',
+  },
 } satisfies Record<string, MessageParts>;
 
 export const messages = {
@@ -161,6 +168,7 @@ export const messages = {
   forceRetranslate: () => buildMessage(definitions.forceRetranslate),
   settingsSaved: () => buildMessage(definitions.settingsSaved),
   mediaSaved: () => buildMessage(definitions.mediaSaved),
+  interruptedRequest: () => buildMessage(definitions.interruptedRequest),
   jobsQueued: (count: number) =>
     buildMessage({
       code: 'jobs-queued',
