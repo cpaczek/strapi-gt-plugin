@@ -1,9 +1,9 @@
-# Published article reader
+# The Ender Post
 
 Start the seeded Strapi application, then run `pnpm --filter @gt/reader dev` from
 the workspace root. Open `http://127.0.0.1:3000/en`.
 
-The reader fetches published articles on the server and renders Blocks, Markdown,
+This unofficial Enderman fan zine fetches published articles on the server and renders Blocks, Markdown,
 components, media captions and galleries. French and Arabic links preserve the
 article's document identity. Unpublished translations show an availability
 message. The Arabic edition uses right-to-left layout.

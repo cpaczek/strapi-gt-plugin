@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import type { Core } from '@strapi/strapi';
+import type { PluginRuntime } from '../../../../packages/plugin/server/src/runtime';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createTestDatabase, type TestDatabase } from '../src/database';
@@ -23,6 +24,9 @@ const isStrapiFramework = (
 if (!isStrapiFramework(framework)) throw new TypeError('Strapi public exports are unavailable');
 const { compileStrapi, createStrapi } = framework;
 const runtime: { strapi?: Core.Strapi; database?: TestDatabase; mock?: MockGtServer } = {};
+const isProcessListener = (value: unknown): value is (...arguments_: unknown[]) => void =>
+  typeof value === 'function';
+const preservedListeners = new Map<string | symbol, ReturnType<typeof process.rawListeners>>();
 const articleRecord = z
   .object({
     documentId: z.string(),
@@ -53,10 +57,19 @@ beforeAll(async () => {
     STRAPI_TELEMETRY_DISABLED: 'true',
   });
   const directories = await compileStrapi({ appDir: resolve(root, 'playground') });
+  for (const event of process.eventNames())
+    preservedListeners.set(event, process.rawListeners(event));
   runtime.strapi = await createStrapi(directories).load();
 });
 afterAll(async () => {
-  if (runtime.strapi) await runtime.strapi.destroy();
+  if (runtime.strapi) {
+    await runtime.strapi.destroy();
+    for (const [event, listeners] of preservedListeners)
+      for (const listener of listeners) {
+        if (isProcessListener(listener) && !process.rawListeners(event).includes(listener))
+          process.on(event, listener);
+      }
+  }
   if (runtime.mock) await runtime.mock.close();
   if (runtime.database) await runtime.database.close();
 });
@@ -77,8 +90,8 @@ describe('real Strapi database behavior', () => {
     const drafts = await app()
       .documents('api::article.article')
       .findMany({ locale: 'en', status: 'draft' });
-    expect(published).toHaveLength(1);
-    expect(drafts).toHaveLength(2);
+    expect(published).toHaveLength(3);
+    expect(drafts).toHaveLength(4);
   });
   it('creates a localized draft under the source document identity', async () => {
     const source = articleRecord.parse(
@@ -148,4 +161,91 @@ describe('real Strapi database behavior', () => {
       ).title
     ).toBe('Notes de la côte');
   });
+});
+
+const record = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null;
+const isTranslationRuntime = (
+  value: unknown
+): value is Pick<PluginRuntime, 'enqueue' | 'worker' | 'repository'> =>
+  record(value) &&
+  typeof value.enqueue === 'function' &&
+  record(value.worker) &&
+  typeof value.worker.stop === 'function' &&
+  typeof value.worker.execute === 'function' &&
+  record(value.repository) &&
+  typeof value.repository.get === 'function';
+
+it('runs the durable translation with the initiating actor and records public GT requests', async () => {
+  const service: unknown = app().plugin('general-translation').service('translation');
+  if (!isTranslationRuntime(service))
+    throw new TypeError('Translation runtime did not expose its worker');
+  await service.worker.stop();
+  const role = z.object({ id: z.number() }).parse(
+    await app()
+      .db.query('admin::role')
+      .findOne({ where: { code: 'strapi-super-admin' } })
+  );
+  const actor = z.object({ id: z.number() }).parse(
+    await app()
+      .db.query('admin::user')
+      .create({
+        data: {
+          firstname: 'Norb',
+          lastname: 'Test editor',
+          email: `${randomBytes(8).toString('hex')}@example.invalid`,
+          isActive: true,
+          roles: [role.id],
+        },
+      })
+  );
+  const source = articleRecord.parse(
+    await app().documents('api::article.article').findFirst({ locale: 'en', status: 'published' })
+  );
+  const queued = await service.enqueue(
+    {
+      contentType: 'api::article.article',
+      documentIds: [source.documentId],
+      targetLocales: ['ar'],
+      force: false,
+    },
+    actor.id,
+    'translate',
+    'published'
+  );
+  const jobId = queued.jobs[0]?.id;
+  if (jobId === undefined) throw new Error('Translation did not create a durable job');
+  await expect
+    .poll(
+      async () => {
+        await service.worker.execute();
+        const job = await service.repository.get(jobId);
+        if (job?.status === 'failed' || job?.status === 'conflict')
+          throw new Error(JSON.stringify(job.error));
+        return job?.status;
+      },
+      { timeout: 60_000, interval: 20 }
+    )
+    .toBe('succeeded');
+  const target = await app()
+    .documents('api::article.article')
+    .findOne({
+      documentId: source.documentId,
+      locale: 'ar',
+      status: 'draft',
+      populate: ['createdBy', 'updatedBy'],
+    });
+  expect(articleRecord.parse(target).title).toBe(`[ar] ${source.title}`);
+  const attribution = z
+    .object({ createdBy: z.object({ id: z.number() }), updatedBy: z.object({ id: z.number() }) })
+    .parse(target);
+  expect(attribution.createdBy.id).toBe(actor.id);
+  expect(attribution.updatedBy.id).toBe(actor.id);
+  expect(
+    await app()
+      .documents('api::article.article')
+      .findOne({ documentId: source.documentId, locale: 'ar', status: 'published' })
+  ).toBeNull();
+  expect(runtime.mock?.requests.some((request) => request.path === '/v2/translate')).toBe(true);
+  expect(JSON.stringify(runtime.mock?.requests)).not.toContain('editor@example.invalid');
 });

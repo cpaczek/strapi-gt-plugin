@@ -2,6 +2,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { articlePath, isReaderLocale } from '../../lib/content';
+import { FeaturePlayground } from '../../lib/feature-playground';
 import { LanguageSwitch } from '../../lib/language-switch';
 import { contentReader, mediaUrl } from '../../lib/strapi';
 
@@ -12,24 +13,24 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
   return (
     <main id="main" className="home">
       <div className="edition-row">
-        <span>Field notes / June 2026</span>
+        <span>The void has a newsletter now</span>
         <LanguageSwitch locale={locale} />
       </div>
       <div className="intro">
-        <span className="eyebrow">Look a little closer</span>
+        <span className="eyebrow">Three blocks tall. Zero chill.</span>
         <h1>
-          There is a story
+          Tall tales.
           <br />
-          in the small things.
+          Petty theft.
         </h1>
         <p>
-          Walks without a destination. Conversations that stay with you. A notebook left open by the
-          sea.
+          Fan fiction, stare crimes, and the ongoing custody battle over one very ordinary dirt
+          block.
         </p>
       </div>
       {articles.length === 0 ? (
         <section className="empty">
-          <h2>The next story is on its way.</h2>
+          <h2>This corner of the void is quiet.</h2>
           <p>No stories have been published in this language yet.</p>
           <Link href="/en">Read the English edition</Link>
         </section>
@@ -61,7 +62,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
               </Link>
               <div className="story-copy">
                 <div className="story-kicker">
-                  <span>{article.category?.name ?? 'Field notes'}</span>
+                  <span>{article.category?.name ?? 'Void dispatch'}</span>
                   <span>{String(index + 1).padStart(2, '0')}</span>
                 </div>
                 <h2>
@@ -69,7 +70,7 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
                 </h2>
                 <p>{article.summary}</p>
                 <div className="story-meta">
-                  <span>{article.credits[0]?.name ?? 'The editors'}</span>
+                  <span>{article.credits[0]?.name ?? 'The editorial void'}</span>
                   <span>{article.readingMinutes ?? 5} min read</span>
                 </div>
                 <Link className="read-link" href={articlePath(locale, article.documentId)}>
@@ -80,14 +81,15 @@ export default async function Home({ params }: { params: Promise<{ locale: strin
           ))}
         </section>
       )}
+      <FeaturePlayground locale={locale} />
       <aside className="closing-note">
-        <span>Our point of view</span>
+        <span>Officially unqualified</span>
         <p>
-          Less noise.
+          We came.
           <br />
-          More noticing.
+          We yoinked.
         </p>
-        <span>A small collection, carefully kept.</span>
+        <span>Your lawn. Our emotional support system.</span>
       </aside>
     </main>
   );

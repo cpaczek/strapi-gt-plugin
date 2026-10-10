@@ -14,11 +14,11 @@ try {
   const articles = await strapi
     .documents('api::article.article')
     .findMany({ locale: 'en', status: 'published' });
-  assert.equal(articles.length, 1);
+  assert.equal(articles.length, 3);
   const drafts = await strapi
     .documents('api::article.article')
     .findMany({ locale: 'en', status: 'draft' });
-  assert.equal(drafts.length, 2);
+  assert.equal(drafts.length, 4);
   process.stdout.write(
     'Packed plugin loaded in the official scaffold; publication controls passed.\n'
   );

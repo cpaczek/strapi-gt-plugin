@@ -1,0 +1,16 @@
+{
+  "collectionName": "components_editorial_glossary_entries",
+  "info": {
+    "displayName": "Slang glossary entry"
+  },
+  "attributes": {
+    "term": {
+      "type": "string",
+      "required": true
+    },
+    "meaning": {
+      "type": "text",
+      "required": true
+    }
+  }
+}

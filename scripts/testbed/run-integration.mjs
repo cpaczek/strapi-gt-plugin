@@ -1,3 +1,4 @@
+import { declaredBinary } from './package-bin.mjs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { resolve, dirname } from 'node:path';
@@ -8,16 +9,10 @@ const root = resolve(import.meta.dirname, '../..');
 const require = createRequire(resolve(root, 'tests/apps/acceptance/package.json'));
 const manifestPath = require.resolve('vitest/package.json');
 const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-if (typeof manifest.bin?.vitest !== 'string')
-  throw new TypeError('Vitest CLI is not declared by the installed package');
+const binary = declaredBinary(manifest, 'vitest');
 const child = spawn(
   process.execPath,
-  [
-    resolve(dirname(manifestPath), manifest.bin.vitest),
-    'run',
-    '--config',
-    'vitest.integration.config.ts',
-  ],
+  [resolve(dirname(manifestPath), binary), 'run', '--config', 'vitest.integration.config.ts'],
   {
     cwd: resolve(root, 'tests/apps/acceptance'),
     env: { ...process.env, NODE_PATH: resolve(root, 'playground/node_modules') },
