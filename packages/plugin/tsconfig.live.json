@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": ".", "types": ["node"] },
+  "include": ["tests/live", "tests/live-smoke.test.ts", "vitest.live.config.mts"]
+}

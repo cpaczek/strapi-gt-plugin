@@ -82,3 +82,20 @@ silently removed to switch transports.
 The source payload limit and batching thresholds live in
 `packages/plugin/shared/constants.ts`. A document exceeding the source limit fails
 before submission. Split oversized content or narrow the translated fields.
+
+## Live verification
+
+From this repository, `pnpm test:live` reads `GT_API_KEY` and `GT_PROJECT_ID` from
+the process environment or the ignored root `.env`. Missing values fail the command
+before it contacts GT. This separate suite never runs during `pnpm test` or CI.
+
+Use a project with an English source locale. The test checks the connection,
+translates one short Enderman announcement with field context, then uploads and
+translates one short JSON file. It verifies the exact returned file version and
+does not force regeneration. The default target is Spanish; `GT_SMOKE_LOCALE`
+selects another supported non-English locale.
+
+The requests use your GT account and can incur usage charges. The small file named
+`strapi-gt-smoke.json` remains in the GT project. Review it in the dashboard after
+the test. A failed or timed-out request is not automatically repeated; check the
+existing GT activity before rerunning the command.
