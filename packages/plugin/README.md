@@ -22,6 +22,9 @@ mappings and fields, save, then test the connection. Use a GT project whose sour
 locale matches Strapi. Assign glossaries and Context Groups in GT; optional field
 context belongs in Strapi settings.
 
+The admin interface includes English, Spanish, French and Arabic labels. It follows
+the language selected in Strapi.
+
 ## Translate
 
 Save the source document, use Translate or the Translation panel, and choose the
@@ -53,9 +56,9 @@ Custom delivery paths must verify their own response behavior.
 Human target changes are protected, including existing text without translation
 history. Force retranslate requires acknowledgement and cannot bypass stale-source
 checks. Large context-free batches use GT's file flow; contextual fields use its
-runtime API. Known remote references survive server restarts in the Strapi database.
-If a paid request's outcome is uncertain, check GT activity before confirming a
-manual retry.
+runtime API. Confirmed runtime chunks and known remote references survive server
+restarts in the Strapi database. An uncertain paid request stops for review; check
+GT activity before confirming a manual retry.
 
 ## Costs and security
 

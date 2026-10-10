@@ -5,10 +5,23 @@ fan fiction, mock interviews, invented slang, Markdown, Blocks, nested component
 dynamic zones and shared media. `playground-next` reads published articles and
 keeps the same document selected when the reader changes language.
 
-The local GT HTTP service produces deterministic marked text. A locale prefix
-proves request routing and content delivery; it is not a claim about GT's language
-quality. Live quality review requires a real project, a permitted key and a small
-separately authorized GT request.
+Mock mode uses a local GT HTTP service that produces deterministic marked text.
+A locale prefix proves request routing and content delivery; it is not a claim
+about GT's language quality. Live mode uses your GT account for actual translations
+and has a separate database.
+
+## Choose a mode
+
+Build the workspace first with `pnpm build`.
+
+| Command          | Translation service                 | Local addresses                                                         |
+| ---------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| `pnpm demo`      | Recording mock; no paid GT requests | Strapi `http://127.0.0.1:1337/admin`, reader `http://127.0.0.1:3000/en` |
+| `pnpm demo:live` | Your GT account                     | Strapi `http://127.0.0.1:1537/admin`, reader `http://127.0.0.1:3300/en` |
+
+Use `READER_PORT` to change the mock reader's port. The live ports have separate
+`LIVE_STRAPI_PORT` and `LIVE_READER_PORT` overrides. The runner stops its own child
+processes when you press Ctrl+C.
 
 ## Editor to reader
 

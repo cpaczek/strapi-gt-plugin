@@ -47,19 +47,20 @@ its final tree with the integration branch before removing it.
 Run commands from the repository root. Use `pnpm --filter <package>` to limit a
 workspace command while developing.
 
-| Command                 | Check                                                         |
-| ----------------------- | ------------------------------------------------------------- |
-| `pnpm build`            | Dependency-ordered workspace builds, including the Plugin SDK |
-| `pnpm typecheck`        | Strict types in each workspace                                |
-| `pnpm lint`             | Defaults, prose, root scripts and workspace lint              |
-| `pnpm test`             | Tooling and workspace behavior tests                          |
-| `pnpm format`           | Formatting without writes                                     |
-| `pnpm test:coverage`    | Plugin engine and server coverage                             |
-| `pnpm test:integration` | Real Strapi Document Service against the selected database    |
-| `pnpm test:e2e`         | Browser workflows with the recording GT service               |
-| `pnpm test:packaging`   | Official Strapi scaffold with a packed local plugin           |
-| `pnpm verify`           | Plugin SDK package validation                                 |
-| `pnpm size`             | Raw admin JavaScript bundle budget                            |
+| Command                 | Check                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `pnpm build`            | Dependency-ordered workspace builds, including the Plugin SDK                   |
+| `pnpm typecheck`        | Strict types in each workspace                                                  |
+| `pnpm lint`             | Defaults, prose, root scripts and workspace lint                                |
+| `pnpm test`             | Tooling and workspace behavior tests                                            |
+| `pnpm format`           | Formatting without writes                                                       |
+| `pnpm test:coverage`    | Plugin engine and server coverage                                               |
+| `pnpm test:integration` | Real Strapi Document Service against the selected database                      |
+| `pnpm test:e2e`         | Browser workflows with the recording GT service                                 |
+| `pnpm test:packaging`   | Official Strapi scaffold with a packed local plugin                             |
+| `pnpm test:live`        | Opt-in real GT requests; requires a key and project ID and uses account credits |
+| `pnpm verify`           | Plugin SDK package validation                                                   |
+| `pnpm size`             | Raw admin JavaScript bundle budget                                              |
 
 `pnpm lint:fix` and `pnpm format:fix` write fixes. Lefthook formats staged files,
 checks prose and checks commit messages. Inspect its changes before committing.
