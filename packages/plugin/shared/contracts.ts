@@ -154,13 +154,20 @@ export interface GtTranslationRequest {
   targetLocale: string;
   segments: TranslationSegment[];
 }
+export interface GtRuntimeProgress {
+  completed: Record<string, string>;
+  onProgress: (completed: Record<string, string>) => Promise<void>;
+}
 export type GtPollResult =
   | { status: 'pending' }
   | { status: 'ready' }
   | { status: 'failed'; message: Diagnostic };
 export interface GtClient {
   testConnection(): Promise<GtProject>;
-  translate(request: GtTranslationRequest): Promise<Record<string, string>>;
+  translate(
+    request: GtTranslationRequest,
+    progress?: GtRuntimeProgress
+  ): Promise<Record<string, string>>;
   upload(request: GtTranslationRequest, fileName: string): Promise<GtFileReference>;
   enqueue(
     reference: GtFileReference,
