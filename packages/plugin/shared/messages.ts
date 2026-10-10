@@ -189,6 +189,12 @@ const definitions = {
     happened: 'diagnostic.network-failure.happened',
     fix: 'diagnostic.network-failure.fix',
   },
+  conflictRecovery: {
+    code: 'conflict-recovery',
+    happened: 'diagnostic.conflict-recovery.happened',
+    fix: 'diagnostic.conflict-recovery.fix',
+    level: 'warning',
+  },
   validation: {
     code: 'validation',
     happened: 'diagnostic.validation.happened',
@@ -259,6 +265,7 @@ export const messages = {
   permissionDenied: () => buildMessage(definitionParts(definitions.permissionDenied)),
   humanEdit: () => buildMessage(definitionParts(definitions.humanEdit)),
   staleSource: () => buildMessage(definitionParts(definitions.staleSource)),
+  conflictRecovery: () => buildMessage(definitionParts(definitions.conflictRecovery)),
   aiConflict: () => buildMessage(definitionParts(definitions.aiConflict)),
   connectionSuccess: () => buildMessage(definitionParts(definitions.connectionSuccess)),
   adminRequestFailure: () => buildMessage(definitionParts(definitions.adminRequestFailure)),

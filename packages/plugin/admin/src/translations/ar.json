@@ -102,8 +102,8 @@
   "media.published": "البيانات الوصفية المنشورة للقراءة فقط. انتقل إلى علامة تبويب المسودة لتعديلها.",
   "media.immediate": "لا يستخدم نوع المحتوى هذا ميزة المسودة والنشر. تظهر تعديلات البيانات الوصفية فورًا.",
   "media.empty": "لا تتوفر بيانات وصفية مؤهلة للوسائط. فعّل البيانات الوصفية للوسائط في الإعدادات واحفظ الوسائط ضمن هذا الإعداد المحلي.",
-  "media.label": "{property} الموطّنة: {path}",
-  "media.source": "{property} الأصلية: {value}",
+  "media.label": "القيمة الموطّنة لـ {property}: {path}",
+  "media.source": "القيمة الأصلية لـ {property}: {value}",
   "media.save": "حفظ {property}: {path}",
   "media.reset": "إعادة تعيين {property}: {path}",
   "media.null": "استخدام null لـ {property}: {path}",
@@ -161,12 +161,14 @@
   "diagnostic.network-failure.happened": "تعذّر إكمال طلب GT",
   "diagnostic.network-failure.fix": "تحقق من اتصال الخادم بالشبكة وأعد محاولة تنفيذ المهمة",
   "diagnostic.validation.happened": "طلب الترجمة غير صالح",
-  "diagnostic.validation.fix": "صحح الإعدادات المميزة وحاول مرة أخرى",
+  "diagnostic.validation.fix": "راجع تفاصيل الطلب، وصحّح الإعدادات أو المحتوى، ثم حاول مرة أخرى",
   "diagnostic.provider-failure.happened": "تعذّر على GT ترجمة المحتوى",
   "diagnostic.provider-failure.fix": "راجع تفاصيل المهمة وأعد المحاولة بعد معالجة السبب",
   "diagnostic.missing-locale.happened": "الإعداد المحلي المستهدف غير موجود لهذا المستند",
   "diagnostic.missing-locale.fix": "فعّل إنشاء الإعدادات المحلية المفقودة وتأكد من امتلاكك صلاحية الإنشاء",
   "diagnostic.source-locale-mismatch.happened": "يستخدم مشروع GT إعدادًا محليًا مختلفًا للمصدر",
   "diagnostic.source-locale-mismatch.fix": "اختر مشروع GT المطابق قبل رفع ملفات الترجمة",
-  "diagnostic.documentation": "التوثيق"
+  "diagnostic.documentation": "التوثيق",
+  "diagnostic.conflict-recovery.happened": "تحتاج هذه الترجمة إلى طلب جديد",
+  "diagnostic.conflict-recovery.fix": "راجع هذا المستند في Content Manager وابدأ ترجمة جديدة"
 }

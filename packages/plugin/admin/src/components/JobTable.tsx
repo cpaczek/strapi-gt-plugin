@@ -1,4 +1,4 @@
-import { localizeDiagnostic } from '../../../shared/messages';
+import { localizeDiagnostic, messages } from '../../../shared/messages';
 import {
   Button,
   Box,
@@ -134,13 +134,18 @@ export const JobTable = ({
                 </Flex>
               </Td>
               <Td>
-                {onRetry && (job.status === 'failed' || job.status === 'conflict') && (
+                {onRetry && job.status === 'failed' && (
                   <RetryJob
                     key={`${job.id}:${job.updatedAt}`}
                     job={job}
                     busy={busy}
                     onRetry={onRetry}
                   />
+                )}
+                {onRetry && job.status === 'conflict' && (
+                  <Typography>
+                    {localizeDiagnostic(messages.conflictRecovery(), text).text}
+                  </Typography>
                 )}
               </Td>
             </Tr>
