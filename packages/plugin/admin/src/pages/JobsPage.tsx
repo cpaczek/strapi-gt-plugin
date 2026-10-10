@@ -54,6 +54,7 @@ export const JobsPage = () => {
             <JobTable
               jobs={resource.result.jobs}
               busy={mutation.busy}
+              emptyMessage={resource.result.total > 0 ? text('jobs.filteredEmpty') : undefined}
               onRetry={
                 canTranslate
                   ? (id) =>
@@ -67,6 +68,13 @@ export const JobsPage = () => {
                   : undefined
               }
             />
+            {resource.result.total > 0 && (
+              <Box padding={4}>
+                <Typography variant="pi" textColor="neutral600">
+                  {text('jobs.visibility')}
+                </Typography>
+              </Box>
+            )}
             <Flex padding={4} justifyContent="space-between" gap={3} wrap="wrap">
               <Typography>{text('jobs.total', { count: resource.result.total })}</Typography>
               <Flex gap={3}>

@@ -62,17 +62,19 @@ export const JobTable = ({
   jobs,
   onRetry,
   busy,
+  emptyMessage,
 }: {
   jobs: JobSummary[];
   onRetry?: (id: number) => void;
   busy: boolean;
+  emptyMessage?: string;
 }) => {
   const text = useText();
   const { formatDate } = useIntl();
   if (!jobs.length)
     return (
       <Box padding={6}>
-        <Typography>{text('jobs.empty')}</Typography>
+        <Typography>{emptyMessage ?? text('jobs.empty')}</Typography>
       </Box>
     );
   return (

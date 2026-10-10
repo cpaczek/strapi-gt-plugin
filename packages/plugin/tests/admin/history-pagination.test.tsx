@@ -29,6 +29,8 @@ describe('history counts after current content authorization', () => {
     await screen.findByRole('button', { name: 'Next page' });
     expect(screen.queryByText(/No translation jobs yet/)).toBeNull();
     expect(screen.getByText('7 recorded jobs')).toBeTruthy();
+    expect(screen.getByText(/Only jobs for source content you can currently read/)).toBeTruthy();
+    expect(screen.getByText(/No jobs on this page are available to view/)).toBeTruthy();
   });
   it('keeps pagination through an empty filtered page so later readable records remain reachable', async () => {
     host.get.mockImplementation((path: string) =>
@@ -48,6 +50,14 @@ describe('history counts after current content authorization', () => {
       '/general-translation/jobs?page=2',
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
+  });
+  it('labels stored records separately when only part of a page remains readable', async () => {
+    host.get.mockResolvedValue({ data: { jobs: [failedJob], total: 7 } });
+    renderAdmin(<JobsPage />);
+    expect(await screen.findByText(failedJob.documentId)).toBeTruthy();
+    expect(screen.getByText('7 recorded jobs')).toBeTruthy();
+    expect(screen.getByText(/The count includes hidden records/)).toBeTruthy();
+    expect(screen.queryByText(/No jobs on this page are available to view/)).toBeNull();
   });
   it('retains first-job guidance only when no records exist', async () => {
     host.get.mockResolvedValue({ data: { jobs: [], total: 0 } });

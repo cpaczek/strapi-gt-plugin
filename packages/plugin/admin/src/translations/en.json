@@ -78,7 +78,7 @@
   "jobs.details": "Details",
   "jobs.retry": "Retry job {id}",
   "jobs.stage": "Stage: {stage}. Attempts: {count}.",
-  "jobs.total": "{count, plural, one {# job} other {# jobs}}",
+  "jobs.total": "{count, plural, one {# recorded job} other {# recorded jobs}}",
   "jobs.previous": "Previous page",
   "jobs.next": "Next page",
   "jobs.page": "Page {page}",
@@ -170,5 +170,7 @@
   "diagnostic.source-locale-mismatch.fix": "Select the matching GT project before uploading translation files",
   "diagnostic.documentation": "Documentation",
   "diagnostic.conflict-recovery.happened": "This translation needs a new request",
-  "diagnostic.conflict-recovery.fix": "Review this document in Content Manager and start a new translation"
+  "diagnostic.conflict-recovery.fix": "Review this document in Content Manager and start a new translation",
+  "jobs.visibility": "Only jobs for source content you can currently read are shown. The count includes hidden records, so some pages may be empty.",
+  "jobs.filteredEmpty": "No jobs on this page are available to view. Their source content may have been removed or your access may have changed."
 }

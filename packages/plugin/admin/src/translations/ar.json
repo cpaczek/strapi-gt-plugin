@@ -78,7 +78,7 @@
   "jobs.details": "التفاصيل",
   "jobs.retry": "إعادة محاولة المهمة {id}",
   "jobs.stage": "المرحلة: {stage}. المحاولات: {count}.",
-  "jobs.total": "{count, plural, zero {لا توجد مهام ترجمة} one {مهمة ترجمة واحدة} two {مهمتا ترجمة} few {# مهام ترجمة} many {# مهمة ترجمة} other {# مهمة ترجمة}}",
+  "jobs.total": "{count, plural, zero {لا توجد مهام مسجّلة} one {مهمة واحدة مسجّلة} two {مهمتان مسجّلتان} few {# مهام مسجّلة} many {# مهمة مسجّلة} other {# مهمة مسجّلة}}",
   "jobs.previous": "الصفحة السابقة",
   "jobs.next": "الصفحة التالية",
   "jobs.page": "الصفحة {page}",
@@ -170,5 +170,7 @@
   "diagnostic.source-locale-mismatch.fix": "اختر مشروع GT المطابق قبل رفع ملفات الترجمة",
   "diagnostic.documentation": "التوثيق",
   "diagnostic.conflict-recovery.happened": "تحتاج هذه الترجمة إلى طلب جديد",
-  "diagnostic.conflict-recovery.fix": "راجع هذا المستند في Content Manager وابدأ ترجمة جديدة"
+  "diagnostic.conflict-recovery.fix": "راجع هذا المستند في Content Manager وابدأ ترجمة جديدة",
+  "jobs.visibility": "تُعرض فقط المهام التي يمكنك حاليًا قراءة محتوى المصدر الخاص بها. يشمل العدد المهام المخفية، لذا قد تكون بعض الصفحات فارغة.",
+  "jobs.filteredEmpty": "لا توجد مهام يمكنك عرضها في هذه الصفحة. ربما حُذف محتوى المصدر أو تغيّرت صلاحيات وصولك."
 }
