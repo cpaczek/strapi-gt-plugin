@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import type { Core } from '@strapi/strapi';
+import type { PersistenceHost } from './persistence';
 import { z } from 'zod';
+import { messages } from '../../shared/messages';
 import {
   JOB_LEASE_MS,
   PLUGIN_ID,
@@ -71,7 +72,7 @@ const jobColumns = (job: StoredJob) => ({
   entryDocumentId: job.documentId,
   payload: job,
 });
-export const createRepository = (strapi: Core.Strapi) => {
+export const createRepository = (strapi: PersistenceHost) => {
   const ensureLease = async (key: string): Promise<void> => {
     const found: unknown = await strapi.db.query(leaseUid).findOne({ where: { key } });
     if (found) return;
@@ -194,8 +195,17 @@ export const createRepository = (strapi: Core.Strapi) => {
             where: { id: job.id, ...due },
             data: { leaseOwner: owner, leaseUntil: until, status: 'running' },
           });
-          if (countSchema.parse(update).count === 1)
-            return { ...job, leaseOwner: owner, leaseUntil: until, status: 'running' };
+          if (countSchema.parse(update).count === 1) {
+            const interrupted =
+              job.status === 'running' && ['translate', 'enqueue'].includes(job.stage);
+            return {
+              ...job,
+              leaseOwner: owner,
+              leaseUntil: until,
+              status: interrupted ? 'failed' : 'running',
+              error: interrupted ? messages.interruptedRequest() : job.error,
+            };
+          }
           await strapi.db.query(leaseUid).updateMany({
             where: { key: `document:${job.key}`, owner },
             data: { owner: null, expiresAt: null },

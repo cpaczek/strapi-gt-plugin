@@ -1,4 +1,8 @@
-import type { Core } from '@strapi/strapi';
+import type { PersistenceHost } from './persistence';
+interface AuthorizationHost extends PersistenceHost {
+  service(uid: 'admin::permission'): unknown;
+  plugin(name: string): { service(name: string): unknown };
+}
 import type { JsonObject } from '../../shared/contracts';
 import { PERMISSIONS } from '../../shared/constants';
 import { messages } from '../../shared/messages';
@@ -13,6 +17,7 @@ export interface AuthorizationInput {
   fields: string[];
   createMissingLocales: boolean;
   publish: boolean;
+  creationActorId?: number;
   can(action: ContentAction, entity: JsonObject, field?: string): boolean;
 }
 export const denied = (): never => {
@@ -22,7 +27,10 @@ export const authorizeDocument = (input: AuthorizationInput): void => {
   if (!input.pluginAllowed) denied();
   if (!input.target && !input.createMissingLocales)
     throw new DiagnosticError(messages.missingLocale(input.targetLocale));
-  const target = input.target ?? { locale: input.targetLocale };
+  const target = input.target ?? {
+    locale: input.targetLocale,
+    ...(input.creationActorId ? { createdBy: { id: input.creationActorId } } : {}),
+  };
   const action = input.target ? 'update' : 'create';
   if (!input.can('read', input.source) || !input.can(action, target)) denied();
   for (const field of input.fields) {
@@ -54,7 +62,7 @@ export interface ActorPermissions {
 }
 
 export const loadActorPermissions = async (
-  strapi: Core.Strapi,
+  strapi: AuthorizationHost,
   actorId: number | null
 ): Promise<ActorPermissions> => {
   if (!actorId) return denied();

@@ -173,6 +173,7 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
       createMissingLocales: job.settings.createMissingLocales,
       publish: job.settings.autoPublish && prepared.input.schema.draftAndPublish,
       can: checkContent(actor.checker(job.contentType)),
+      creationActorId: job.actorId ?? denied(),
     });
   };
   const apply = async (job: StoredJob): Promise<void> => {
@@ -234,7 +235,9 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
           prepared.input.schema,
           job.documentId,
           job.targetLocale,
-          applied.patch
+          applied.patch,
+          job.actorId ?? denied(),
+          !target
         );
       const updated = await documents.read(
         prepared.input.schema,
@@ -454,9 +457,20 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
           return denied();
       }
       if (edit)
-        return documents.transaction(schema, documentId, async () =>
-          media.edit(edit, schema, components, document, settings)
-        );
+        return documents.transaction(schema, documentId, async () => {
+          const current = await documents.read(schema, components, documentId, locale, 'draft');
+          if (!current) return fail('The selected locale no longer exists');
+          const currentActor = await loadActorPermissions(strapi, actorId);
+          const currentPermission = checkContent(currentActor.checker(contentType));
+          const field = permissionField(schema, components, current, edit.path);
+          if (
+            !currentActor.plugin('translate') ||
+            !currentPermission('read', current, field) ||
+            !currentPermission('update', current, field)
+          )
+            return denied();
+          return media.edit(edit, schema, components, current, settings);
+        });
       return media.items(schema, components, document, settings, variant);
     },
   };

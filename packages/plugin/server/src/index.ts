@@ -135,6 +135,7 @@ const route = (
   path,
   handler: `translation.${action}`,
   config: {
+    auth: { strategies: ['admin'] },
     policies: [{ name: `plugin::${PLUGIN_ID}.permission`, config: { actions: permissions } }],
   },
 });
@@ -242,7 +243,7 @@ const register = ({ strapi }: { strapi: Core.Strapi }): void => {
         request.method === 'GET' &&
         routeInfo.type === 'content-api'
       ) {
-        const decorated = await runtime.media.decorate(result, schema, components, settings);
+        const decorated = await runtime.media.decorate(result, schema, components, settings, true);
         if (Array.isArray(result) && Array.isArray(decorated))
           result.forEach((item, index) => {
             const replacement: unknown = decorated[index];
@@ -329,7 +330,13 @@ const register = ({ strapi }: { strapi: Core.Strapi }): void => {
         : settings.automaticMode === 'save' && ['create', 'update'].includes(context.action);
     const user = objectRecord(state.user) ? state.user : {};
     const params: unknown = context.params;
-    if (automatic && typeof user.id === 'number' && objectRecord(params)) {
+    const adminSession =
+      routeInfo.type === 'admin' &&
+      objectRecord(state.session) &&
+      typeof state.session.id === 'string' &&
+      objectRecord(state.userAbility) &&
+      typeof state.userAbility.can === 'function';
+    if (automatic && adminSession && typeof user.id === 'number' && objectRecord(params)) {
       const rows: unknown[] = Array.isArray(result)
         ? result
         : objectRecord(result) && Array.isArray(result.entries)

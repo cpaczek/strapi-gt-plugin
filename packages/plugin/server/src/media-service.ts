@@ -1,4 +1,4 @@
-import type { Core } from '@strapi/strapi';
+import type { PersistenceHost } from './persistence';
 import { DEFAULT_SETTINGS } from '../../shared/constants';
 import { z } from 'zod';
 import type {
@@ -40,7 +40,7 @@ export const mediaOccurrences = (
     context?: string
   ): void => {
     for (const [name, field] of Object.entries(currentSchema.attributes)) {
-      if (field.private || (currentPath.length === 0 && field.localized === false)) continue;
+      if (field.private || field.localized === false) continue;
       const fieldPath = [...currentPath, name];
       const rule =
         configuration?.fields[fieldPath.filter((part) => typeof part === 'string').join('.')];
@@ -80,7 +80,13 @@ const structure = (value: JsonValue): JsonValue => {
       .map(([key, item]) => [key, structure(item)])
   );
 };
-export const mediaStructureHash = (document: JsonObject): string => hashValue(structure(document));
+export const mediaStructureHash = (document: JsonObject, path: FieldPath = []): string => {
+  const first = path[0];
+  return hashValue({
+    path: [...path],
+    structure: structure(typeof first === 'string' ? (document[first] ?? null) : document),
+  });
+};
 const sameOccurrence = (
   left: Pick<MediaOverlay, 'path' | 'property'>,
   right: Pick<MediaOverlay, 'path' | 'property'>
@@ -101,7 +107,7 @@ export const preparationTarget = (
         (item) =>
           sameOccurrence(item, { path: occurrence.path, property }) &&
           item.assetId === assetIdentity(asset) &&
-          item.structureHash === mediaStructureHash(target)
+          item.structureHash === mediaStructureHash(target, occurrence.path)
       );
       asset[property] = overlay ? overlay.value : null;
     }
@@ -125,9 +131,9 @@ export const appliedMedia = (
     )
     .map((overlay) =>
       previousDocument &&
-      overlay.structureHash === mediaStructureHash(previousDocument) &&
+      overlay.structureHash === mediaStructureHash(previousDocument, overlay.path) &&
       assetIdentity(atPath(document, overlay.path)) === overlay.assetId
-        ? { ...overlay, structureHash: mediaStructureHash(document) }
+        ? { ...overlay, structureHash: mediaStructureHash(document, overlay.path) }
         : overlay
     );
   for (const item of applied.media) {
@@ -140,7 +146,7 @@ export const appliedMedia = (
           property,
           assetId: item.assetId,
           sourceHash: item.sourceHash,
-          structureHash: mediaStructureHash(document),
+          structureHash: mediaStructureHash(document, item.path),
           value,
           origin: 'translated',
         });
@@ -148,7 +154,7 @@ export const appliedMedia = (
   }
   return overlays;
 };
-export const createMediaService = (strapi: Core.Strapi, repository: JobRepository) => {
+export const createMediaService = (strapi: PersistenceHost, repository: JobRepository) => {
   const rawAssets = async (assetIds: string[]): Promise<Map<string, JsonObject>> => {
     if (!assetIds.length) return new Map();
     const rows: unknown = await strapi.db
@@ -195,7 +201,7 @@ export const createMediaService = (strapi: Core.Strapi, repository: JobRepositor
         const stale =
           overlay &&
           (overlay.sourceHash !== mediaSourceHash(asset, property, occurrence.context) ||
-            overlay.structureHash !== mediaStructureHash(document));
+            overlay.structureHash !== mediaStructureHash(document, occurrence.path));
         result.push({
           path: occurrence.path,
           assetId,
@@ -270,7 +276,7 @@ export const createMediaService = (strapi: Core.Strapi, repository: JobRepositor
           property: request.property,
           assetId: id,
           sourceHash: mediaSourceHash(raw, request.property, occurrence.context),
-          structureHash: mediaStructureHash(document),
+          structureHash: mediaStructureHash(document, request.path),
           value: request.value,
           origin: 'manual',
         });
@@ -289,7 +295,8 @@ export const createMediaService = (strapi: Core.Strapi, repository: JobRepositor
       result: unknown,
       schema: ContentSchema,
       components: Record<string, ContentSchema>,
-      settings: PluginSettings
+      settings: PluginSettings,
+      publishedOnly = false
     ): Promise<unknown> {
       const documents = Array.isArray(result) ? result : result ? [result] : [];
       const valid = documents.flatMap((document) => {
@@ -311,7 +318,8 @@ export const createMediaService = (strapi: Core.Strapi, repository: JobRepositor
           if (
             typeof document.documentId !== 'string' ||
             typeof document.locale !== 'string' ||
-            (schema.draftAndPublish && !Object.hasOwn(document, 'publishedAt'))
+            (schema.draftAndPublish &&
+              (!Object.hasOwn(document, 'publishedAt') || (publishedOnly && !document.publishedAt)))
           )
             return original;
           const state = await repository.state(
@@ -325,7 +333,7 @@ export const createMediaService = (strapi: Core.Strapi, repository: JobRepositor
             occurrences.some((item) => JSON.stringify(item.path) === JSON.stringify(overlay.path))
           );
           return overlayDocument(document, allowed, {
-            structureHash: mediaStructureHash,
+            structureHash: (document, overlay) => mediaStructureHash(document, overlay.path),
             sourceHash: (overlay) => {
               const asset = raw.get(overlay.assetId);
               const occurrence = occurrences.find(
