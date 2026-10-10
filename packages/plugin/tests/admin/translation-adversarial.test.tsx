@@ -82,6 +82,19 @@ describe('translation adversarial cases', () => {
       true
     );
   });
+  it('requires fresh consent after changing the selected targets', () => {
+    mount();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Force retranslate' }));
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'I reviewed the target content and accept replacing human edits',
+      })
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'French (fr)' }));
+    expect(screen.getByRole('button', { name: 'Force retranslate' }).hasAttribute('disabled')).toBe(
+      true
+    );
+  });
   it('warns about immediate publication on nondraft content', () => {
     mount({
       ...options,
