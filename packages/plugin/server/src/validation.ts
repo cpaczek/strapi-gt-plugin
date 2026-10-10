@@ -7,12 +7,17 @@ import type {
   PluginSettings,
 } from '../../shared/contracts';
 import { messages } from '../../shared/messages';
-import { MAX_DOCUMENTS_PER_REQUEST } from '../../shared/constants';
+import {
+  MAX_DOCUMENTS_PER_REQUEST,
+  HTTP_BAD_REQUEST_STATUS,
+  PROJECT_ID_MAX_LENGTH,
+  DOCUMENT_ID_MAX_LENGTH,
+} from '../../shared/constants';
 
 export class DiagnosticError extends Error {
   constructor(
     readonly diagnostic: Diagnostic,
-    readonly status = 400
+    readonly status = HTTP_BAD_REQUEST_STATUS
   ) {
     super(diagnostic.text);
     this.name = 'DiagnosticError';
@@ -44,7 +49,7 @@ export const fieldRule = z
   .strict();
 export const settingsSchema = z
   .object({
-    projectId: z.string().trim().max(200),
+    projectId: z.string().trim().max(PROJECT_ID_MAX_LENGTH),
     sourceLocale: z.string().min(1),
     targetLocales: z.array(z.string().min(1)),
     localeMapping: z.record(z.string(), z.string().min(1)),
@@ -60,7 +65,10 @@ export const settingsSchema = z
 export const requestSchema = z
   .object({
     contentType: z.string().min(1),
-    documentIds: z.array(z.string().min(1).max(200)).min(1).max(MAX_DOCUMENTS_PER_REQUEST),
+    documentIds: z
+      .array(z.string().min(1).max(DOCUMENT_ID_MAX_LENGTH))
+      .min(1)
+      .max(MAX_DOCUMENTS_PER_REQUEST),
     targetLocales: z.array(z.string().min(1)).min(1),
     force: z.boolean(),
   })

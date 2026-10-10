@@ -1,7 +1,7 @@
 import type { Core } from '@strapi/strapi';
 import type { Context } from 'koa';
 import { z } from 'zod';
-import { GT_BASE_URL, PERMISSIONS, PLUGIN_ID } from '../../shared/constants';
+import { GT_BASE_URL, PERMISSIONS, PLUGIN_ID, SETTINGS_ACTION } from '../../shared/constants';
 import { messages } from '../../shared/messages';
 import { contentTypes } from './content-types';
 import { internalOperation } from './documents';
@@ -142,7 +142,7 @@ const routes = {
   admin: {
     type: 'admin',
     routes: [
-      route('GET', '/settings', 'settings', [PERMISSIONS.readSettings]),
+      route('GET', '/settings', SETTINGS_ACTION, [PERMISSIONS.readSettings]),
       route('GET', '/translation-options', 'translationOptions', [
         PERMISSIONS.translate,
         PERMISSIONS.bulkTranslate,

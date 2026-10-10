@@ -15,6 +15,7 @@ import type {
   PreparedTranslation,
   TranslationRequest,
   SettingsResponse,
+  TranslationOptionsResponse,
   MediaOverlayRequest,
 } from '../../shared/contracts';
 import { messages } from '../../shared/messages';
@@ -351,7 +352,7 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
     metadata,
     enqueue,
     settings: settingsResponse,
-    async translationOptions() {
+    async translationOptions(): Promise<TranslationOptionsResponse> {
       const settings = await savedSettings();
       const available = await metadata();
       return {
