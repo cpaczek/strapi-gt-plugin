@@ -6,6 +6,8 @@ import type { ReactNode } from 'react';
 import { z } from 'zod';
 import { useMutation, useResource } from '../../admin/src/hooks';
 import { TranslateAction, TranslateBulkAction, TranslationPanel } from '../../admin/src/extensions';
+import { DocumentPanel } from '../../admin/src/components/DocumentPanel';
+import { renderAdmin } from './render';
 import { isContentManagerApi } from '../../admin/src/index';
 import { messages } from '../../shared/messages';
 import { options } from './fixtures';
@@ -140,6 +142,23 @@ describe('host permission and request behavior', () => {
     host.get.mockRejectedValue(new Error('Offline'));
     const { result } = renderHook(() => TranslationPanel(context), { wrapper });
     await waitFor(() => expect(result.current?.title).toBe('Translation'));
+  });
+  it('requests one latest outcome per locale rather than a history page', async () => {
+    host.get.mockResolvedValue({ data: { jobs: [], total: 0 } });
+    renderAdmin(
+      <DocumentPanel
+        model="api::article.article"
+        documentId="one"
+        options={options}
+        published={false}
+      />
+    );
+    await waitFor(() => expect(host.get).toHaveBeenCalled());
+    const query = new URL(host.get.mock.calls[0]?.[0], 'http://localhost');
+    expect(query.pathname).toBe('/general-translation/jobs');
+    expect(query.searchParams.get('latestPerLocale')).toBe('true');
+    expect(query.searchParams.get('contentType')).toBe('api::article.article');
+    expect(query.searchParams.get('documentId')).toBe('one');
   });
   it('refuses incompatible Content Manager extension objects', () => {
     expect(isContentManagerApi({ addDocumentAction: vi.fn(), addBulkAction: vi.fn() })).toBe(false);
