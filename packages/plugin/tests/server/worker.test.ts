@@ -198,3 +198,42 @@ it('saves an interrupted job without making another provider request', async () 
     expect.objectContaining({ status: 'failed' })
   );
 });
+
+import { runJobAttempt } from '../../server/src/worker';
+import { messages } from '../../shared/messages';
+it.each(['translate', 'enqueue'] as const)(
+  'does not retry %s after uncertain provider acceptance',
+  async (stage) => {
+    const job = jobFixture({ id: 1, status: 'running', stage, prepared });
+    const next = await runJobAttempt(job, {
+      repository: setup().repository,
+      operations: async () => {
+        throw {
+          diagnostic: messages.networkFailure('The response was lost'),
+          retryable: true,
+          acceptance: 'unknown',
+        };
+      },
+      retryDelay: () => 1,
+      log: () => undefined,
+    });
+    expect(next).toMatchObject({ status: 'failed', error: { code: 'interrupted-request' } });
+  }
+);
+it('still backs off an explicit paid-stage rejection', async () => {
+  const job = jobFixture({ id: 1, status: 'running', stage: 'translate', prepared });
+  const next = await runJobAttempt(job, {
+    repository: setup().repository,
+    operations: async () => {
+      throw {
+        diagnostic: messages.providerFailure('GT rejected the request'),
+        retryable: true,
+        acceptance: 'rejected',
+      };
+    },
+    retryDelay: () => 1,
+    log: () => undefined,
+  });
+  expect(next.status).toBe('waiting');
+  expect(next.error?.code).not.toBe('interrupted-request');
+});

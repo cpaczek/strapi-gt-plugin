@@ -72,3 +72,63 @@ describe('saved settings', () => {
     ).toThrow();
   });
 });
+
+it('uses the schema UID source field when regeneration has no explicit override', () => {
+  const configured = {
+    ...settings,
+    contentTypes: {
+      'api::article.article': {
+        fields: { slug: { translate: true, uidStrategy: 'regenerate' } },
+        mediaMetadata: false,
+      },
+    },
+  };
+  const available = {
+    ...metadata,
+    contentTypes: [
+      {
+        ...metadata.contentTypes[0]!,
+        attributes: {
+          ...metadata.contentTypes[0]!.attributes,
+          slug: { type: 'uid', localized: true, targetField: 'title' },
+        },
+      },
+    ],
+  };
+  expect(() => validateSettings(configured, available)).not.toThrow();
+});
+it('rejects a nested field hidden by a private component', () => {
+  const available = {
+    ...metadata,
+    contentTypes: [
+      {
+        ...metadata.contentTypes[0]!,
+        attributes: {
+          panel: { type: 'component', localized: true, private: true, component: 'shared.panel' },
+        },
+      },
+    ],
+    components: {
+      'shared.panel': {
+        uid: 'shared.panel',
+        localized: true,
+        draftAndPublish: false,
+        attributes: { title: { type: 'string' } },
+      },
+    },
+  };
+  expect(() =>
+    validateSettings(
+      {
+        ...settings,
+        contentTypes: {
+          'api::article.article': {
+            fields: { 'panel.title': { translate: true } },
+            mediaMetadata: false,
+          },
+        },
+      },
+      available
+    )
+  ).toThrow();
+});

@@ -257,9 +257,38 @@ export const createRepository = (strapi: PersistenceHost) => {
       });
       return countSchema.parse(locks).count === 2;
     },
+    async saveProgress(job: StoredJob, completed: Record<string, string>): Promise<boolean> {
+      const current: unknown = await strapi.db
+        .query(jobUid)
+        .findOne({
+          where: {
+            id: job.id,
+            leaseOwner: job.leaseOwner,
+            leaseUntil: { $gt: new Date().toISOString() },
+          },
+        });
+      if (!current || !job.leaseOwner) return false;
+      const saved = decode(current);
+      const updated: unknown = await strapi.db
+        .query(jobUid)
+        .updateMany({
+          where: {
+            id: job.id,
+            leaseOwner: job.leaseOwner,
+            leaseUntil: { $gt: new Date().toISOString() },
+          },
+          data: { payload: { ...saved, runtimeProgress: { ...completed } } },
+        });
+      return countSchema.parse(updated).count === 1;
+    },
     async completeStage(job: StoredJob): Promise<boolean> {
+      const current: unknown = await strapi.db
+        .query(jobUid)
+        .findOne({ where: { id: job.id, leaseOwner: job.leaseOwner } });
+      const savedProgress = current ? decode(current).runtimeProgress : job.runtimeProgress;
       const updated = {
         ...job,
+        runtimeProgress: savedProgress ?? {},
         leaseOwner: null,
         leaseUntil: null,
         updatedAt: new Date().toISOString(),

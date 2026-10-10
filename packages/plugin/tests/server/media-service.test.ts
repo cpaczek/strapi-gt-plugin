@@ -299,3 +299,167 @@ it('keeps media localization when unrelated relations are populated', async () =
   );
   expect(result).toMatchObject({ image: { alternativeText: 'Nuages' } });
 });
+
+it('traverses repeatable components and dynamic zones with inherited context', () => {
+  const child: ContentSchema = {
+    uid: 'shared.gallery',
+    localized: true,
+    draftAndPublish: false,
+    attributes: { image: { type: 'media' } },
+  };
+  const parent: ContentSchema = {
+    ...schema,
+    attributes: {
+      cards: { type: 'component', component: child.uid, repeatable: true, localized: true },
+      zones: { type: 'dynamiczone', components: [child.uid], localized: true },
+      ignored: { type: 'media', localized: true },
+    },
+  };
+  const configured = {
+    ...settings,
+    contentTypes: {
+      [schema.uid]: {
+        mediaMetadata: true,
+        fields: {
+          cards: { translate: true, context: 'Gallery photograph' },
+          ignored: { translate: false },
+        },
+      },
+    },
+  };
+  const occurrences = mediaOccurrences(
+    {
+      cards: [{ image: asset }],
+      zones: [{ __component: child.uid, image: asset }],
+      ignored: asset,
+    },
+    parent,
+    { [child.uid]: child },
+    configured
+  );
+  expect(occurrences.map((item) => item.path)).toEqual([
+    ['cards', 0, 'image'],
+    ['zones', 0, 'image'],
+  ]);
+  expect(occurrences[0]?.context).toBe('Gallery photograph');
+});
+it('does not overlay malformed results or invent missing document identity', async () => {
+  const { service } = await setup();
+  expect(await service.decorate([null, 7, 'text'], schema, {}, settings)).toEqual([
+    null,
+    7,
+    'text',
+  ]);
+  await expect(service.items(schema, {}, { image: asset }, settings, 'draft')).rejects.toThrow();
+});
+it('refuses draft media overlays on the public delivery path', async () => {
+  const { service, repository } = await setup();
+  await saveDraft(repository);
+  expect(await service.decorate(document, schema, {}, settings, true)).toMatchObject({
+    image: { alternativeText: 'Clouds' },
+  });
+});
+it('suppresses overlays after the source asset is removed', async () => {
+  const { service, repository, host } = await setup();
+  await saveDraft(repository);
+  await host.db.query('plugin::upload.file').deleteMany({ where: { id: 1 } });
+  expect(await service.decorate(document, schema, {}, settings)).toMatchObject({
+    image: { alternativeText: 'Clouds' },
+  });
+  expect((await service.items(schema, {}, document, settings, 'draft')).items).toEqual([]);
+});
+it('rejects a localized metadata edit after its file was removed', async () => {
+  const { service, host } = await setup();
+  await host.db.query('plugin::upload.file').deleteMany({ where: { id: 1 } });
+  await expect(
+    service.edit(
+      {
+        contentType: schema.uid,
+        documentId: 'doc',
+        locale: 'fr',
+        path: ['image'],
+        property: 'caption',
+        value: 'New',
+        reset: false,
+      },
+      schema,
+      {},
+      document,
+      settings
+    )
+  ).rejects.toThrow();
+});
+it('does not emit properties with an invalid stored type', async () => {
+  const { service, host } = await setup();
+  await host.db
+    .query('plugin::upload.file')
+    .update({ where: { id: 1 }, data: { alternativeText: 9, caption: null } });
+  expect((await service.items(schema, {}, document, settings, 'draft')).items).toEqual([
+    expect.objectContaining({ property: 'caption', source: null }),
+  ]);
+});
+it('does not emit absent raw metadata properties', async () => {
+  const { service, records } = await setup();
+  const raw = records('plugin::upload.file')[0];
+  if (!raw) throw new Error('Missing file');
+  delete raw.alternativeText;
+  delete raw.caption;
+  expect((await service.items(schema, {}, document, settings, 'draft')).items).toEqual([]);
+});
+it('rejects a prepared media translation after the raw file was deleted', async () => {
+  const { service, host } = await setup();
+  const prepared = translationEngine.prepare({
+    schema,
+    components: {},
+    source: document,
+    target: null,
+    rules: {},
+    checkpoints: {},
+    force: false,
+    mediaMetadata: true,
+  });
+  await host.db.query('plugin::upload.file').deleteMany({ where: { id: 1 } });
+  await expect(service.validatePrepared(prepared)).rejects.toThrow();
+});
+it('keeps valid unchanged overlays when text changes in another field', () => {
+  const state = { checkpoints: {}, media: [translated()], appliedJob: 1 };
+  const changed = { ...document, title: 'New title' };
+  expect(
+    appliedMedia(
+      { patch: { title: 'New title' }, checkpoints: {}, media: [] },
+      changed,
+      state,
+      document
+    )
+  ).toEqual([translated()]);
+});
+it('retains stale overlays for review without rebinding them to a replacement asset', () => {
+  const state = { checkpoints: {}, media: [translated()], appliedJob: 1 };
+  const changed = { ...document, image: { ...asset, id: 4 } };
+  const result = appliedMedia(
+    {
+      patch: {},
+      checkpoints: {},
+      media: [{ path: ['image'], assetId: '9', sourceHash: 'h', caption: 'Wrong' }],
+    },
+    changed,
+    state,
+    null
+  );
+  expect(result).toEqual(state.media);
+});
+it('replaces a translated property while preserving another localized property', () => {
+  const state = { checkpoints: {}, media: [translated()], appliedJob: 1 };
+  const result = appliedMedia(
+    {
+      patch: {},
+      checkpoints: {},
+      media: [{ path: ['image'], assetId: '1', sourceHash: 'new', alternativeText: 'Nouveau' }],
+    },
+    document,
+    state,
+    document
+  );
+  expect(result).toHaveLength(1);
+  expect(result[0]?.value).toBe('Nouveau');
+});

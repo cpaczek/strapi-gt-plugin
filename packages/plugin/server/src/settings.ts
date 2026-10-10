@@ -28,6 +28,7 @@ export const fieldAtPath = (
   if (!head) return undefined;
   const field = schema.attributes[head];
   if (!field || !parts.length) return field;
+  if (field.private || field.localized === false) return undefined;
   if (field.component) {
     const component = components[field.component];
     return component && fieldAtPath(component, components, parts.join('.'));
@@ -76,11 +77,20 @@ export const validateSettings = (input: unknown, metadata: SettingsMetadata): Pl
         fail('Enable localized media metadata before selecting media fields');
       if (rule.uidStrategy && field.type !== 'uid')
         fail('UID behavior can only be set on a UID field');
-      if (
-        rule.uidStrategy === 'regenerate' &&
-        (!rule.sourceField || !fieldAtPath(schema, metadata.components, rule.sourceField))
-      )
-        fail('Choose a source field for the UID');
+      if (rule.uidStrategy === 'regenerate') {
+        const sourceName = rule.sourceField ?? field.targetField;
+        const sourcePath = [...path.split('.').slice(0, -1), sourceName].filter(Boolean).join('.');
+        const source = sourceName
+          ? fieldAtPath(schema, metadata.components, sourcePath)
+          : undefined;
+        if (
+          !source ||
+          source.private ||
+          source.localized === false ||
+          !['string', 'text', 'richtext'].includes(source.type)
+        )
+          fail('Choose a localized text source field for the UID');
+      }
     }
   }
   if (metadata.aiTranslationsEnabled && settings.automaticMode !== 'off')

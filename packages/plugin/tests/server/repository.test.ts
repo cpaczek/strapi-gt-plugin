@@ -219,3 +219,37 @@ it('returns each locale latest job even beyond the history page size', async () 
   expect(response.find((job) => job.targetLocale === 'ar')?.id).toBe(arabic.id);
   expect(response.find((job) => job.targetLocale === 'fr')?.id).toBe(arabic.id + 30);
 });
+
+it('persists runtime chunks under the existing lease before a worker restarts', async () => {
+  const { host } = persistenceFixture();
+  const repository = createRepository(host);
+  await repository.create(jobFixture({ stage: 'translate' }));
+  const job = await repository.claim();
+  if (!job) throw new Error('No lease');
+  expect(await repository.saveProgress(job, { chunk: 'Translated' })).toBe(true);
+  expect((await createRepository(host).get(job.id))?.runtimeProgress).toEqual({
+    chunk: 'Translated',
+  });
+  expect(await repository.owns(job)).toBe(true);
+});
+it('rejects runtime chunk checkpoints from a stale owner', async () => {
+  const { host } = persistenceFixture();
+  const repository = createRepository(host);
+  await repository.create(jobFixture({ stage: 'translate' }));
+  const job = await repository.claim();
+  if (!job) throw new Error('No lease');
+  expect(await repository.saveProgress({ ...job, leaseOwner: 'stale' }, { chunk: 'Wrong' })).toBe(
+    false
+  );
+  expect((await repository.get(job.id))?.runtimeProgress ?? {}).toEqual({});
+});
+it('retains a durable chunk checkpoint when a later stage attempt fails', async () => {
+  const { host } = persistenceFixture();
+  const repository = createRepository(host);
+  await repository.create(jobFixture({ stage: 'translate' }));
+  const job = await repository.claim();
+  if (!job) throw new Error('No lease');
+  await repository.saveProgress(job, { chunk: 'Translated' });
+  await repository.completeStage({ ...job, status: 'waiting' });
+  expect((await repository.get(job.id))?.runtimeProgress).toEqual({ chunk: 'Translated' });
+});
