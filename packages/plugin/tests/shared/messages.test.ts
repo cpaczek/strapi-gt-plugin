@@ -170,3 +170,12 @@ describe('interrupted request diagnostics', () => {
     expect(message.text).toContain('Keep the current content');
   });
 });
+
+describe('optional media fallback', () => {
+  it('explains fallback without breaking the content response', () => {
+    const message = messages.mediaUnavailable();
+    expect(message.code).toBe('media-unavailable');
+    expect(message.level).toBe('warning');
+    expect(message.text).toContain('shared media text');
+  });
+});
