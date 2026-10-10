@@ -1,6 +1,32 @@
 import { assertAccessible } from './accessibility';
 import { expect, test } from '@playwright/test';
 
+test('the Latin masthead keeps its order on LTR and RTL pages', async ({ page }) => {
+  for (const viewport of [
+    { width: 1440, height: 1000 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const locale of ['en', 'ar']) {
+      await page.goto(`/${locale}`);
+      await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+      const positions = await page.locator('.wordmark').evaluate((wordmark) => {
+        const prefix = wordmark.firstChild;
+        const suffix = wordmark.querySelector('.wordmark-dot');
+        if (!(prefix instanceof Text) || !(suffix instanceof HTMLElement))
+          throw new Error('The masthead wordmark is missing its text');
+        const range = document.createRange();
+        range.selectNode(prefix);
+        return {
+          prefix: range.getBoundingClientRect().left,
+          suffix: suffix.getBoundingClientRect().left,
+        };
+      });
+      expect(positions.prefix).toBeLessThan(positions.suffix);
+    }
+  }
+});
+
 test('published edition is accessible and excludes the draft control', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto('/en');
