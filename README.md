@@ -19,14 +19,14 @@ Both images were captured with Playwright from the running local applications.
 
 ## Compatibility
 
-| Component       | Supported target                     | Verification                                  |
-| --------------- | ------------------------------------ | --------------------------------------------- |
-| Strapi          | 5.57.x                               | Real app and tarball consumer on 5.57.0       |
-| Node.js         | Node 22 from 22.12, Node 24, Node 26 | Local runs on pinned 24.21.0                  |
-| Package manager | Source workspace: pnpm 12.11.2       | Install, build and local packing              |
-| SQLite          | 3                                    | Real integration and fresh tarball app        |
-| PostgreSQL      | 14 or later                          | Real translation and publication tests on 17  |
-| MySQL           | 8.0 or later                         | Real translation and publication tests on 8.4 |
+| Component       | Supported target                     | Verification                                                                                                           |
+| --------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| Strapi          | 5.57.x                               | Real app and tarball consumer on 5.57.0                                                                                |
+| Node.js         | Node 22 from 22.12, Node 24, Node 26 | 24.21.0: full suite and all 3 databases. 22.23.3/26.11.1: plugin build, 233 engine/shared and 6 PostgreSQL tests each. |
+| Package manager | Source workspace: pnpm 12.11.2       | Install, build and local packing                                                                                       |
+| SQLite          | 3                                    | Real integration and fresh tarball app                                                                                 |
+| PostgreSQL      | 14 or later                          | Real translation and publication tests on 17                                                                           |
+| MySQL           | 8.0 or later                         | Real translation and publication tests on 8.4                                                                          |
 
 Strapi's [installation requirements](https://docs.strapi.io/cms/installation/cli)
 list the supported Node LTS releases and database versions. Internationalization
