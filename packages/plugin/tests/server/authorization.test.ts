@@ -145,3 +145,24 @@ describe('current actor authority', () => {
     expect(checkContent(actor.checker('article'))('read', { locale: 'en' }, 'secret')).toBe(false);
   });
 });
+
+it('checks conditional create permission against the recorded creator', () => {
+  expect(() =>
+    authorizeDocument({
+      pluginAllowed: true,
+      source,
+      target: null,
+      targetLocale: 'fr',
+      fields: ['title'],
+      createMissingLocales: true,
+      publish: false,
+      creationActorId: 7,
+      can: (action, entity) =>
+        action !== 'create' ||
+        (typeof entity.createdBy === 'object' &&
+          entity.createdBy !== null &&
+          'id' in entity.createdBy &&
+          entity.createdBy.id === 7),
+    })
+  ).not.toThrow();
+});
