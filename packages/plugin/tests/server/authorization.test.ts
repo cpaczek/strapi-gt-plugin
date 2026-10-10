@@ -166,3 +166,25 @@ it('checks conditional create permission against the recorded creator', () => {
     })
   ).not.toThrow();
 });
+
+it('does not accept truthy non-boolean plugin permission results', async () => {
+  const fixture = persistenceFixture();
+  await fixture.host.db.query('admin::user').create({ data: { isActive: true } });
+  const host = {
+    ...fixture.host,
+    service: () => ({ engine: { generateUserAbility: async () => ({ can: () => 'true' }) } }),
+    plugin: () => ({ service: () => ({ create: () => ({ can: () => true }) }) }),
+  };
+  expect((await loadActorPermissions(host, 1)).plugin('translate')).toBe(false);
+});
+it('does not accept truthy non-boolean content permission results', async () => {
+  const fixture = persistenceFixture();
+  await fixture.host.db.query('admin::user').create({ data: { isActive: true } });
+  const host = {
+    ...fixture.host,
+    service: () => ({ engine: { generateUserAbility: async () => ({ can: () => true }) } }),
+    plugin: () => ({ service: () => ({ create: () => ({ can: () => ({ allowed: true }) }) }) }),
+  };
+  const actor = await loadActorPermissions(host, 1);
+  expect(checkContent(actor.checker('article'))('read', { locale: 'en' })).toBe(false);
+});
