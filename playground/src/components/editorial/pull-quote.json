@@ -1,0 +1,14 @@
+{
+  "collectionName": "components_editorial_pull_quote",
+  "info": {
+    "displayName": "Pull quote"
+  },
+  "attributes": {
+    "quote": {
+      "type": "text"
+    },
+    "attribution": {
+      "type": "string"
+    }
+  }
+}

@@ -159,3 +159,121 @@ describe('recording GT service over the public HTTP contract', () => {
     expect(wrong.data?.files).toEqual([]);
   });
 });
+
+describe('adversarial recording service requests', () => {
+  it.each([400, 401, 402, 403, 413, 500])(
+    'returns HTTP %i without client retries',
+    async (status) => {
+      const { client, server } = await setup();
+      server.failNext({ status });
+      const response = await translate({
+        client,
+        body: {
+          sourceLocale: 'en',
+          targetLocale: 'fr',
+          metadata: {},
+          requests: { title: { source: 'Shore' } },
+        },
+      });
+      expect(response.response.status).toBe(status);
+      expect(server.requests).toHaveLength(1);
+    }
+  );
+  it('keeps empty strings empty', async () => {
+    const { client } = await setup();
+    const response = await translate({
+      client,
+      body: {
+        sourceLocale: 'en',
+        targetLocale: 'ar',
+        metadata: {},
+        requests: { empty: { source: '' } },
+      },
+    });
+    expect(response.data?.empty).toMatchObject({ success: true, translation: '' });
+  });
+  it('preserves unusual Unicode through HTTP', async () => {
+    const { client } = await setup();
+    const source = 'مرحبا café 🐚 e\u0301';
+    const response = await translate({
+      client,
+      body: {
+        sourceLocale: 'en',
+        targetLocale: 'ar',
+        metadata: {},
+        requests: { title: { source } },
+      },
+    });
+    expect(response.data?.title).toMatchObject({ translation: `[ar] ${source}` });
+  });
+  it('isolates concurrent runtime requests', async () => {
+    const { client, server } = await setup();
+    const responses = await Promise.all(
+      ['fr', 'ar'].map((targetLocale) =>
+        translate({
+          client,
+          body: {
+            sourceLocale: 'en',
+            targetLocale,
+            metadata: {},
+            requests: { title: { source: targetLocale } },
+          },
+        })
+      )
+    );
+    expect(responses[0]?.data?.title).toMatchObject({ translation: '[fr] fr' });
+    expect(responses[1]?.data?.title).toMatchObject({ translation: '[ar] ar' });
+    expect(server.requests).toHaveLength(2);
+  });
+  it('rejects malformed JSON', async () => {
+    const { server, apiKey } = await setup();
+    const response = await fetch(`${server.url}/v2/translate`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+      body: '{',
+    });
+    expect(response.status).toBe(400);
+  });
+  it('rejects unrecognized request shapes', async () => {
+    const { server, apiKey } = await setup();
+    const response = await fetch(`${server.url}/v2/translate`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ text: 'Unsupported legacy shape' }),
+    });
+    expect(response.status).toBe(400);
+  });
+  it('does not claim an unknown job completed', async () => {
+    const { client } = await setup();
+    expect((await getTranslationJobInfo({ client, body: { jobIds: ['not-a-job'] } })).data).toEqual(
+      [{ jobId: 'not-a-job', status: 'unknown' }]
+    );
+  });
+  it('rejects invalid base64 upload content', async () => {
+    const { client } = await setup();
+    const response = await uploadSourceFiles({
+      client,
+      body: {
+        data: [
+          {
+            source: {
+              content: 'not base64!',
+              fileName: 'broken.json',
+              fileFormat: 'JSON',
+              locale: 'en',
+            },
+          },
+        ],
+      },
+    });
+    expect(response.response.status).toBe(400);
+  });
+  it('does not accept a source version that was never uploaded', async () => {
+    const { client } = await setup();
+    const response = await enqueueFileTranslations({
+      client,
+      body: { files: [{ fileId: 'absent', versionId: 'absent' }], targetLocales: ['fr'] },
+    });
+    expect(response.response.status).toBe(400);
+  });
+});

@@ -1,5 +1,7 @@
 {
   "extends": "../../../tsconfig.base.json",
-  "compilerOptions": { "types": ["node"] },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts", "*.ts"]
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts", "*.ts", "integration/**/*.ts"]
 }

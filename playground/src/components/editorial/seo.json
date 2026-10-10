@@ -1,0 +1,19 @@
+{
+  "collectionName": "components_editorial_seo",
+  "info": {
+    "displayName": "Seo"
+  },
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "social": {
+      "type": "component",
+      "component": "editorial.social",
+      "repeatable": false
+    }
+  }
+}

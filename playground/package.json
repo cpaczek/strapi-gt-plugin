@@ -1,0 +1,41 @@
+{
+  "name": "@gt/playground",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Seeded Strapi example for localized publishing.",
+  "scripts": {
+    "build": "node ../scripts/testbed/strapi-command.mjs build",
+    "develop": "node ../scripts/testbed/strapi-command.mjs develop",
+    "dev": "node ../scripts/testbed/strapi-command.mjs develop",
+    "start": "node ../scripts/testbed/strapi-command.mjs start",
+    "strapi": "node ../scripts/testbed/strapi-command.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint config src",
+    "format": "oxfmt --check config src"
+  },
+  "dependencies": {
+    "@strapi/plugin-users-permissions": "catalog:",
+    "@strapi/strapi": "catalog:",
+    "better-sqlite3": "catalog:",
+    "mysql2": "catalog:",
+    "pg": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-router-dom": "catalog:",
+    "strapi-plugin-general-translation": "workspace:*",
+    "styled-components": "catalog:"
+  },
+  "devDependencies": {
+    "@strapi/types": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "node": ">=20.0.0 <=26.x.x",
+    "npm": ">=6.0.0"
+  }
+}

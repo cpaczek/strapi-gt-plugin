@@ -1,0 +1,139 @@
+{
+  "kind": "collectionType",
+  "collectionName": "articles",
+  "info": {
+    "singularName": "article",
+    "pluralName": "articles",
+    "displayName": "Article"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {
+    "i18n": {
+      "localized": true
+    }
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title",
+      "required": true
+    },
+    "summary": {
+      "type": "text",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "markdown": {
+      "type": "richtext",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "body": {
+      "type": "blocks",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      }
+    },
+    "seo": {
+      "type": "component",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "component": "editorial.seo",
+      "repeatable": false
+    },
+    "credits": {
+      "type": "component",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "component": "editorial.credit",
+      "repeatable": true
+    },
+    "sections": {
+      "type": "dynamiczone",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "components": ["editorial.pull-quote", "editorial.text-section", "editorial.gallery"]
+    },
+    "cover": {
+      "type": "media",
+      "pluginOptions": {
+        "i18n": {
+          "localized": true
+        }
+      },
+      "multiple": false,
+      "allowedTypes": ["images"]
+    },
+    "category": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::category.category",
+      "inversedBy": "articles"
+    },
+    "relatedArticles": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::article.article"
+    },
+    "featured": {
+      "type": "boolean"
+    },
+    "readingMinutes": {
+      "type": "integer"
+    },
+    "budget": {
+      "type": "decimal"
+    },
+    "preciseDistance": {
+      "type": "float"
+    },
+    "observationDate": {
+      "type": "date"
+    },
+    "departureTime": {
+      "type": "time"
+    },
+    "observedAt": {
+      "type": "datetime"
+    },
+    "edition": {
+      "type": "enumeration",
+      "enum": ["field-notes", "interview", "essay"]
+    },
+    "coordinates": {
+      "type": "json"
+    },
+    "contactEmail": {
+      "type": "email",
+      "private": true
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "collectionName": "components_editorial_text_section",
+  "info": {
+    "displayName": "Text section"
+  },
+  "attributes": {
+    "heading": {
+      "type": "string"
+    },
+    "body": {
+      "type": "blocks"
+    }
+  }
+}

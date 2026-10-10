@@ -9,7 +9,10 @@
     "lint": "oxlint src tests e2e *.ts",
     "format": "oxfmt --check .",
     "mock": "tsx src/run-mock.ts",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "test:integration": "node ../../../scripts/testbed/run-integration.mjs",
+    "test:e2e": "playwright test",
+    "test:packaging": "tsx src/fresh-install.ts"
   },
   "dependencies": {
     "@generaltranslation/api": "catalog:",
@@ -18,10 +21,13 @@
   "devDependencies": {
     "@axe-core/playwright": "catalog:",
     "@playwright/test": "catalog:",
+    "@strapi/strapi": "catalog:",
     "@types/node": "catalog:",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
+    "vite": "catalog:",
     "vitest": "catalog:"
   }
 }
