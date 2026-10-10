@@ -101,6 +101,16 @@ export const startStrapiFixture = async () => {
     `module.exports = ${JSON.stringify({ connection: { client: 'sqlite', connection: { filename: resolve(directory, 'test.db') }, useNullAsDefault: true } })};`
   );
   await write('src/api/article/content-types/article/schema.json', schema, true);
+  await write(
+    'src/api/note/content-types/note/schema.json',
+    {
+      ...schema,
+      collectionName: 'server_notes',
+      info: { singularName: 'note', pluralName: 'notes', displayName: 'Server note' },
+      options: { draftAndPublish: false },
+    },
+    true
+  );
   await write('src/index.js', 'module.exports = {};');
   await mkdir(resolve(directory, 'public/uploads'), { recursive: true });
   let strapi: Core.Strapi | undefined;

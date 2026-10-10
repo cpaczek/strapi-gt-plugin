@@ -117,3 +117,124 @@ describe('durable translation stages', () => {
     ).rejects.toThrow('Conflict');
   });
 });
+
+it('persists runtime output before application', async () => {
+  const next = await transitionJob(
+    { ...job(), stage: 'translate', prepared },
+    { client, prepare: async () => prepared, apply: async () => undefined }
+  );
+  expect(next).toMatchObject({ stage: 'apply', translations: { title: 'Bonjour' } });
+});
+it('accepts cached enqueue responses without remote jobs', async () => {
+  const next = await transitionJob(
+    {
+      ...job(),
+      stage: 'enqueue',
+      prepared,
+      file: { fileId: 'file', versionId: 'version', branchId: 'branch' },
+    },
+    {
+      client: { ...client, enqueue: async () => [] },
+      prepare: async () => prepared,
+      apply: async () => undefined,
+    }
+  );
+  expect(next).toMatchObject({ stage: 'poll', remoteJobIds: [] });
+});
+it('persists pending polls without treating them as failures', async () => {
+  const next = await transitionJob(
+    {
+      ...job(),
+      stage: 'poll',
+      prepared,
+      file: { fileId: 'file', versionId: 'version', branchId: 'branch' },
+    },
+    {
+      client: { ...client, poll: async () => ({ status: 'pending' }) },
+      prepare: async () => prepared,
+      apply: async () => undefined,
+    }
+  );
+  expect(next.status).toBe('waiting');
+  expect(Date.parse(next.nextRunAt)).toBeGreaterThan(Date.now());
+});
+it('rejects failed remote jobs rather than downloading', async () => {
+  await expect(
+    transitionJob(
+      {
+        ...job(),
+        stage: 'poll',
+        prepared,
+        file: { fileId: 'file', versionId: 'version', branchId: 'branch' },
+      },
+      {
+        client: {
+          ...client,
+          poll: async () => ({
+            status: 'failed',
+            message: {
+              code: 'provider-failure',
+              level: 'error',
+              text: 'Translation failed',
+              details: {},
+            },
+          }),
+        },
+        prepare: async () => prepared,
+        apply: async () => undefined,
+      }
+    )
+  ).rejects.toThrow();
+});
+it.each(['enqueue', 'poll', 'download'] as const)(
+  'refuses %s without an exact saved file',
+  async (stage) => {
+    await expect(
+      transitionJob(
+        { ...job(), stage, prepared },
+        { client, prepare: async () => prepared, apply: async () => undefined }
+      )
+    ).rejects.toThrow();
+  }
+);
+it('persists downloaded output before application', async () => {
+  const next = await transitionJob(
+    {
+      ...job(),
+      stage: 'download',
+      prepared,
+      file: { fileId: 'file', versionId: 'version', branchId: 'branch' },
+    },
+    { client, prepare: async () => prepared, apply: async () => undefined }
+  );
+  expect(next).toMatchObject({ stage: 'apply', translations: { title: 'Bonjour' } });
+});
+it('applies local-only changes even without translatable segments', async () => {
+  const next = await transitionJob(job(), {
+    client,
+    prepare: async () => ({ ...prepared, segments: [] }),
+    apply: async () => undefined,
+  });
+  expect(next.stage).toBe('apply');
+});
+it('routes large context-free batches through persisted file stages', async () => {
+  const large = {
+    ...prepared,
+    segments: Array.from({ length: 51 }, (_, index) => ({
+      id: String(index),
+      path: ['title'],
+      text: 'Text',
+      kind: 'text' as const,
+    })),
+  };
+  expect(shouldUseFiles(large)).toBe(true);
+  expect(
+    (
+      await transitionJob(job(), {
+        client,
+        prepare: async () => large,
+        apply: async () => undefined,
+      })
+    ).stage
+  ).toBe('upload');
+});
