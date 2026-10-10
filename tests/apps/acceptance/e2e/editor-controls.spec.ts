@@ -540,6 +540,9 @@ test('a genuine source conflict requires review and a new editor translation', a
       row.getByText(/Review this document in Content Manager and start a new translation/)
     ).toBeVisible();
     await assertAccessible(page);
+    await row
+      .getByText(/Review this document in Content Manager and start a new translation/)
+      .scrollIntoViewIfNeeded();
     await page.screenshot({
       path: '../../../.work/screenshots/review-conflict-recovery.png',
       fullPage: true,
@@ -564,6 +567,82 @@ test('a genuine source conflict requires review and a new editor translation', a
     await expect(page.getByRole('textbox', { name: /^summary$/i })).toHaveValue(`[fr] ${revision}`);
   } finally {
     await control.setJobStatus('completed');
+  }
+});
+
+test('a worker source-locale failure retains its detail in English and French history', async ({
+  page,
+  editor,
+}) => {
+  const source = await editor.createSource('Source locale diagnostic');
+  await clearFieldContexts(page);
+  await openDocument(page, source);
+  await page.getByRole('textbox', { name: /^summary$/i }).fill(largeSummary);
+  await saveDocument(page);
+  const first = await queueFrench(page);
+  expect(
+    (await awaitTerminalJobs(editor.api, source.documentId, first)).map((job) => job.status)
+  ).toEqual(['succeeded']);
+  await openSettings(page);
+  await page.getByRole('combobox', { name: 'Source locale', exact: true }).click();
+  await page.getByRole('option', { name: 'French (fr)', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'English (en)', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'Arabic (ar)', exact: true }).check();
+  await saveSettings(page);
+  await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+  await openTranslation(page);
+  const modal = page.getByRole('dialog', { name: 'Translate content' });
+  await expect(modal.getByRole('checkbox', { name: 'Arabic (ar)', exact: true })).toBeChecked();
+  const queued = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/general-translation/translate' &&
+      response.request().method() === 'POST'
+  );
+  await modal.getByRole('button', { name: 'Translate', exact: true }).click();
+  const response = await queued;
+  expect(response.status()).toBe(200);
+  const ids = enqueueSchema.parse(await response.json()).jobs.map((job) => job.id);
+  const failed = await awaitTerminalJobs(editor.api, source.documentId, ids);
+  expect(
+    failed.map((job) => ({
+      status: job.status,
+      code: job.error?.code,
+      locale: job.error?.details.locale,
+    }))
+  ).toEqual([{ status: 'failed', code: 'source-locale-mismatch', locale: 'en' }]);
+  await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
+  await expect(
+    page.getByText(messages.sourceLocaleMismatch('en').text, { exact: true })
+  ).toBeVisible();
+  await assertAccessible(page);
+  try {
+    await page.goto(`${adminOrigin}/admin/me`);
+    await page.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: 'Français', exact: true }).click();
+    const saved = page.waitForResponse(
+      (incoming) =>
+        new URL(incoming.url()).pathname === '/admin/users/me' &&
+        incoming.request().method() === 'PUT'
+    );
+    await page.locator('button[type="submit"]').click();
+    expect((await saved).status()).toBe(200);
+    await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
+    await page.getByRole('main').focus();
+    await expect(
+      page.getByText(
+        'General Translation: Le projet GT utilise une langue source différente. Sélectionnez le projet GT correspondant avant de téléverser les fichiers de traduction. en.',
+        { exact: true }
+      )
+    ).toBeVisible();
+    await assertAccessible(page);
+    await page.screenshot({
+      path: '../../../.work/screenshots/review-worker-diagnostic-fr.png',
+      fullPage: true,
+    });
+  } finally {
+    expect(
+      (await editor.api.put('/admin/users/me', { data: { preferedLanguage: 'en' } })).status()
+    ).toBe(200);
   }
 });
 
@@ -861,10 +940,18 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
           await force.focus();
           await force.press('Space');
           await expect(force).toBeChecked();
-          await expect(controls.getByText(/dans les langues sélectionnées/)).toBeVisible();
+          await expect(
+            controls.getByText(
+              /^General Translation: Forcer une nouvelle traduction peut remplacer les modifications humaines dans les langues sélectionnées\./
+            )
+          ).toBeVisible();
           await expect(
             controls.getByRole('button', { name: forceLabel, exact: true })
           ).toBeDisabled();
+          await controls
+            .getByText(/^General Translation: Forcer une nouvelle traduction/)
+            .scrollIntoViewIfNeeded();
+          await page.screenshot({ path: '../../../.work/screenshots/review-force-fr.png' });
         } else {
           await expect(
             controls.getByText(`القيمة الأصلية لـ نص بديل: ${asset.alternativeText}`, {
@@ -876,6 +963,9 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
           ).toBeVisible();
         }
         await assertAccessible(page, `section[aria-label=${JSON.stringify(controlsLabel)}]`);
+        await controls
+          .getByRole('textbox', { name: labels.caption, exact: true })
+          .scrollIntoViewIfNeeded();
         await page.screenshot({
           path: `../../../.work/screenshots/review-metadata-${language.code}.png`,
           fullPage: true,
