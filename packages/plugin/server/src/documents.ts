@@ -26,12 +26,20 @@ export const createDocuments = (strapi: Core.Strapi) => ({
     schema: ContentSchema,
     documentId: string,
     locale: string,
-    patch: JsonObject
+    patch: JsonObject,
+    actorId: number,
+    newLocale: boolean
   ): Promise<void> {
     const uid = schema.uid;
     if (!registeredUid(strapi, uid)) return fail('The content type no longer exists');
     await internalOperation.run(true, () =>
-      strapi.documents(uid).update({ documentId, locale, data: patch })
+      strapi
+        .documents(uid)
+        .update({
+          documentId,
+          locale,
+          data: { ...patch, updatedBy: actorId, ...(newLocale ? { createdBy: actorId } : {}) },
+        })
     );
   },
   async publish(schema: ContentSchema, documentId: string, locale: string): Promise<void> {

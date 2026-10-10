@@ -17,6 +17,7 @@ export interface AuthorizationInput {
   fields: string[];
   createMissingLocales: boolean;
   publish: boolean;
+  creationActorId?: number;
   can(action: ContentAction, entity: JsonObject, field?: string): boolean;
 }
 export const denied = (): never => {
@@ -26,7 +27,10 @@ export const authorizeDocument = (input: AuthorizationInput): void => {
   if (!input.pluginAllowed) denied();
   if (!input.target && !input.createMissingLocales)
     throw new DiagnosticError(messages.missingLocale(input.targetLocale));
-  const target = input.target ?? { locale: input.targetLocale };
+  const target = input.target ?? {
+    locale: input.targetLocale,
+    ...(input.creationActorId ? { createdBy: { id: input.creationActorId } } : {}),
+  };
   const action = input.target ? 'update' : 'create';
   if (!input.can('read', input.source) || !input.can(action, target)) denied();
   for (const field of input.fields) {

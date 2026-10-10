@@ -57,6 +57,7 @@ export const runJobAttempt = async (
   job: StoredJob,
   dependencies: WorkerDependencies
 ): Promise<StoredJob> => {
+  if (job.status !== 'running') return job;
   try {
     return await transitionJob(job, await dependencies.operations(job));
   } catch (failure) {
