@@ -100,4 +100,5 @@ jobs:
       - run: pnpm build
       - run: pnpm verify
       - run: pnpm size
+      - run: pnpm --filter @gt/acceptance exec playwright install --with-deps chromium
       - run: pnpm test:packaging

@@ -13,6 +13,12 @@ and has a separate database.
 ## Choose a mode
 
 Build the workspace first with `pnpm build`.
+Both demo commands run the built applications. Use the individual package
+development commands when editing source files.
+
+`pnpm demo` always uses the generated local mock key, project and loopback endpoint.
+It removes inherited `GT_*` values and `STRAPI_API_TOKEN` from the reader and mock
+service environments. Explicit `TESTBED_*` acceptance controls remain available.
 
 | Command          | Translation service                 | Local addresses                                                         |
 | ---------------- | ----------------------------------- | ----------------------------------------------------------------------- |
