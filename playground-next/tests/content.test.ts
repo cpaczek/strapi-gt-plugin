@@ -72,6 +72,57 @@ describe('published content delivery', () => {
 });
 
 describe('published reader boundary cases', () => {
+  it.each(['body', 'sections', 'credits', 'glossary'])(
+    'accepts an unset optional %s field',
+    async (field) => {
+      const reader = createContentReader({
+        origin: 'http://127.0.0.1:1337',
+        fetch: respond({ data: { ...publishedArticle, [field]: null } }),
+      });
+      expect(await reader.get('stable-document', 'fr')).toMatchObject({ [field]: [] });
+    }
+  );
+  it('accepts a valid minimal article with no summary or body', async () => {
+    const reader = createContentReader({
+      origin: 'http://127.0.0.1:1337',
+      fetch: respond({ data: { ...publishedArticle, summary: null, body: null } }),
+    });
+    expect(await reader.get('stable-document', 'fr')).toMatchObject({ summary: '', body: [] });
+  });
+  it('accepts optional fields unset inside valid components', async () => {
+    const reader = createContentReader({
+      origin: 'http://127.0.0.1:1337',
+      fetch: respond({
+        data: {
+          ...publishedArticle,
+          credits: [{ name: null, role: null }],
+          sections: [
+            { __component: 'editorial.text-section', heading: null, body: null },
+            { __component: 'editorial.pull-quote', quote: null },
+            { __component: 'editorial.gallery', images: null },
+          ],
+        },
+      }),
+    });
+    expect(await reader.get('stable-document', 'fr')).toMatchObject({
+      credits: [{ name: '', role: '' }],
+      sections: [
+        { __component: 'editorial.text-section', heading: '', body: [] },
+        { __component: 'editorial.pull-quote', quote: '' },
+        { __component: 'editorial.gallery', images: [] },
+      ],
+    });
+  });
+  it.each(['body', 'sections', 'credits', 'glossary'])(
+    'still rejects a malformed nonempty %s field',
+    async (field) => {
+      const reader = createContentReader({
+        origin: 'http://127.0.0.1:1337',
+        fetch: respond({ data: { ...publishedArticle, [field]: [7] } }),
+      });
+      await expect(reader.get('stable-document', 'fr')).rejects.toThrow();
+    }
+  );
   it('drops a record from the wrong locale', async () => {
     const reader = createContentReader({
       origin: 'http://127.0.0.1:1337',

@@ -10,6 +10,7 @@ test('published edition is accessible and excludes the draft control', async ({ 
   await expect(
     page.getByText('UNPUBLISHED: my extremely normal plan to steal the moon')
   ).toHaveCount(0);
+  await expect(page.locator('.feature-story img')).toHaveAttribute('loading', 'eager');
   await assertAccessible(page);
   await page.screenshot({ path: '../../../.work/screenshots/reader-viewport.png' });
   await page.screenshot({ path: '../../../.work/screenshots/reader-home.png', fullPage: true });
@@ -26,6 +27,7 @@ test('article navigation retains identity across language changes', async ({ pag
     })
   ).toBeVisible();
   await expect(page).toHaveURL(/\/en\/articles\/[^/]+$/);
+  await expect(page.locator('.cover img')).toHaveAttribute('loading', 'eager');
   const documentId = new URL(page.url()).pathname.split('/').at(-1);
   await page.getByRole('link', { name: 'العربية', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/ar/articles/${documentId}$`));
