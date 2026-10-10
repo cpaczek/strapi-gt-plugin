@@ -22,6 +22,10 @@ export const JOB_HISTORY_PAGE_SIZE = 25;
 export const UI_POLL_MS = 2_500;
 export const ERROR_DETAIL_LIMIT = 400;
 export const SETTINGS_STORE_KEY = 'settings';
+export const SETTINGS_ACTION = 'settings';
+export const HTTP_BAD_REQUEST_STATUS = 400;
+export const PROJECT_ID_MAX_LENGTH = 200;
+export const DOCUMENT_ID_MAX_LENGTH = 200;
 export const PERMISSIONS = {
   readSettings: `plugin::${PLUGIN_ID}.read-settings`,
   writeSettings: `plugin::${PLUGIN_ID}.write-settings`,

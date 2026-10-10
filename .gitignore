@@ -19,3 +19,6 @@ test-results/
 .next/
 .strapi/
 public/uploads/
+!.agents/skills/build/
+!.agents/skills/build/**
+tests/apps/.generated/
