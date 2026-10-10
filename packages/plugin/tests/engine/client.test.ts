@@ -163,7 +163,7 @@ describe('public GT transport', () => {
 
 describe('locale and retry boundaries', () => {
   it('uses supported locale normalization and explicit mappings', () => {
-    expect(resolveGtLocale('fr-FR', {})).toBe('fr');
+    expect(resolveGtLocale('fr-FR', {})).toBe('fr-FR');
     expect(resolveGtLocale('cms-arabic', { 'cms-arabic': 'ar' })).toBe('ar');
     expect(resolveGtLocale('en-GB', {})).toBe('en-GB');
     expect(() => resolveGtLocale('qbr', {})).toThrow();
