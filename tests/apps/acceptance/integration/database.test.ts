@@ -216,18 +216,20 @@ it('runs the durable translation with the initiating actor and records public GT
   );
   const jobId = queued.jobs[0]?.id;
   if (jobId === undefined) throw new Error('Translation did not create a durable job');
-  await expect
-    .poll(
-      async () => {
-        await service.worker.execute();
-        const job = await service.repository.get(jobId);
-        if (job?.status === 'failed' || job?.status === 'conflict')
-          throw new Error(JSON.stringify(job.error));
-        return job?.status;
-      },
-      { timeout: 60_000, interval: 20 }
-    )
-    .toBe('succeeded');
+  const finishJob = async (id: number): Promise<void> =>
+    expect
+      .poll(
+        async () => {
+          await service.worker.execute();
+          const job = await service.repository.get(id);
+          if (job?.status === 'failed' || job?.status === 'conflict')
+            throw new Error(JSON.stringify(job.error));
+          return job?.status;
+        },
+        { timeout: 60_000, interval: 20 }
+      )
+      .toBe('succeeded');
+  await finishJob(jobId);
   const target = await app()
     .documents('api::article.article')
     .findOne({
@@ -249,6 +251,58 @@ it('runs the durable translation with the initiating actor and records public GT
   ).toBeNull();
   const slug = z.object({ slug: z.string().min(1) }).parse(target).slug;
   expect(slug).not.toBe('');
+  const category = z.object({ documentId: z.string() }).parse(
+    await app()
+      .documents('api::category.category')
+      .create({
+        data: { name: 'Editor assigned category', slug: 'editor-assigned-category' },
+      })
+  );
+  const relation: Record<string, { connect: string[] }> = {
+    category: { connect: [category.documentId] },
+  };
+  await app()
+    .documents('api::article.article')
+    .update({ documentId: source.documentId, locale: 'ar', data: relation });
+  const revisedTitle = `${source.title}: an editor correction`;
+  const changedFields: Record<string, string> = { title: revisedTitle };
+  await app().documents('api::article.article').update({
+    documentId: source.documentId,
+    locale: 'en',
+    data: changedFields,
+  });
+  const changed = await service.enqueue(
+    {
+      contentType: 'api::article.article',
+      documentIds: [source.documentId],
+      targetLocales: ['ar'],
+      force: false,
+    },
+    actor.id,
+    'translate',
+    'draft'
+  );
+  const changedId = changed.jobs[0]?.id;
+  if (changedId === undefined) throw new Error('Changed source did not create a durable job');
+  expect(changedId).not.toBe(jobId);
+  await finishJob(changedId);
+  const revised = z
+    .object({
+      title: z.string(),
+      category: z.object({ documentId: z.string() }),
+    })
+    .parse(
+      await app()
+        .documents('api::article.article')
+        .findOne({
+          documentId: source.documentId,
+          locale: 'ar',
+          status: 'draft',
+          populate: ['category'],
+        })
+    );
+  expect(revised.title).toBe(`[ar] ${revisedTitle}`);
+  expect(revised.category.documentId).toBe(category.documentId);
   const publication = { observed: false };
   const unsubscribe = app().eventHub.on('entry.publish', (payload: unknown) => {
     const event = z
@@ -280,7 +334,7 @@ it('runs the durable translation with the initiating actor and records public GT
         .documents('api::article.article')
         .findOne({ documentId: source.documentId, locale: 'ar', status: 'published' })
     ).title
-  ).toBe(`[ar] ${source.title}`);
+  ).toBe(`[ar] ${revisedTitle}`);
   expect(runtime.mock?.requests.some((request) => request.path === '/v2/translate')).toBe(true);
   expect(JSON.stringify(runtime.mock?.requests)).not.toContain('editor@example.invalid');
 });

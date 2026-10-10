@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { cp, mkdir, mkdtemp, symlink } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, symlink } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { setTimeout as pollDelay } from 'node:timers/promises';
 import { promisify } from 'node:util';
+import { declaredBinary } from '../../../../scripts/testbed/package-bin.mjs';
 
 const root = resolve(import.meta.dirname, '../../../..');
 const origin = new URL(process.argv[2]);
@@ -19,6 +21,10 @@ const directory = await mkdtemp(resolve(root, 'tests/apps/.generated/packed-read
 const readerDirectory = resolve(directory, 'playground-next');
 await mkdir(readerDirectory);
 await cp(resolve(root, 'tsconfig.base.json'), resolve(directory, 'tsconfig.base.json'));
+const sharedDirectory = resolve(directory, 'packages/plugin/shared');
+await mkdir(sharedDirectory, { recursive: true });
+for (const name of ['messages.ts', 'constants.ts', 'contracts.ts'])
+  await cp(resolve(root, 'packages/plugin/shared', name), resolve(sharedDirectory, name));
 for (const path of ['app', 'lib', 'package.json', 'tsconfig.json', 'next.config.ts'])
   await cp(resolve(root, 'playground-next', path), resolve(readerDirectory, path), {
     recursive: true,
@@ -37,7 +43,11 @@ const environment = {
   STRAPI_URL: origin.origin,
 };
 const execute = promisify(execFile);
-const build = await execute('pnpm', ['exec', 'next', 'build', '--webpack'], {
+const require = createRequire(resolve(root, 'playground-next/package.json'));
+const manifestPath = require.resolve('next/package.json');
+const binary = declaredBinary(JSON.parse(await readFile(manifestPath, 'utf8')), 'next');
+const nextCli = resolve(dirname(manifestPath), binary);
+const build = await execute(process.execPath, [nextCli, 'build', '--webpack'], {
   cwd: readerDirectory,
   env: environment,
   timeout: 180000,
@@ -55,8 +65,8 @@ await new Promise((resolve, reject) =>
   reservation.close((error) => (error ? reject(error) : resolve()))
 );
 const reader = spawn(
-  'pnpm',
-  ['exec', 'next', 'start', '--hostname', '127.0.0.1', '--port', String(port)],
+  process.execPath,
+  [nextCli, 'start', '--hostname', '127.0.0.1', '--port', String(port)],
   {
     cwd: readerDirectory,
     env: environment,
