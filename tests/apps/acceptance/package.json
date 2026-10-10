@@ -1,0 +1,33 @@
+{
+  "name": "@gt/acceptance",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run tests",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src tests e2e *.ts",
+    "format": "oxfmt --check .",
+    "mock": "tsx src/run-mock.ts",
+    "e2e": "playwright test",
+    "test:integration": "node ../../../scripts/testbed/run-integration.mjs",
+    "test:e2e": "playwright test",
+    "test:packaging": "tsx src/fresh-install.ts"
+  },
+  "dependencies": {
+    "@generaltranslation/api": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "catalog:",
+    "@playwright/test": "catalog:",
+    "@strapi/strapi": "catalog:",
+    "@types/node": "catalog:",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

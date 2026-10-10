@@ -1,0 +1,16 @@
+{
+  "collectionName": "components_editorial_gallery",
+  "info": {
+    "displayName": "Gallery"
+  },
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "images": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": ["images"]
+    }
+  }
+}

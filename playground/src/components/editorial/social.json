@@ -1,0 +1,14 @@
+{
+  "collectionName": "components_editorial_social",
+  "info": {
+    "displayName": "Social"
+  },
+  "attributes": {
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    }
+  }
+}

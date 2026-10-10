@@ -1,0 +1,14 @@
+{
+  "collectionName": "components_editorial_credit",
+  "info": {
+    "displayName": "Credit"
+  },
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    }
+  }
+}
