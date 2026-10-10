@@ -330,3 +330,39 @@ describe('classified diagnostic transport', () => {
     expect(JSON.stringify(result)).not.toContain('private-example');
   });
 });
+
+it('persists the classified engine reason before the next admin read', async () => {
+  const { worker, operations, repository } = setup();
+  const diagnostic = messages.sourceLocaleMismatch('fr-CA');
+  operations.mockRejectedValueOnce(new GtRequestError(diagnostic));
+  await worker.execute();
+  expect(repository.completeStage).toHaveBeenCalledWith(
+    expect.objectContaining({ status: 'failed', error: diagnostic })
+  );
+});
+it('omits a malformed documentation URL without dropping safe details', () => {
+  const diagnostic = { ...messages.validation('Select a locale'), docs: 'not a URL' };
+  const classified = classifyFailure(new GtRequestError(diagnostic));
+  expect(classified.diagnostic.docs).toBeUndefined();
+  expect(classified.diagnostic.details).toEqual(diagnostic.details);
+});
+
+it('preserves a safe HTTP documentation URL', () => {
+  const diagnostic = {
+    ...messages.validation('Select a locale'),
+    docs: 'http://example.invalid/help',
+  };
+  expect(classifyFailure(new GtRequestError(diagnostic)).diagnostic.docs).toBe(diagnostic.docs);
+});
+it('preserves own detail keys without mutating object prototypes', () => {
+  const diagnostic = {
+    ...messages.validation('Safe'),
+    details: Object.fromEntries([
+      ['__proto__', 'Safe field'],
+      ['constructor', 'Safe value'],
+    ]),
+  };
+  expect(classifyFailure(new GtRequestError(diagnostic)).diagnostic.details).toEqual(
+    diagnostic.details
+  );
+});

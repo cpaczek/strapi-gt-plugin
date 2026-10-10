@@ -5,7 +5,7 @@ import {
   WORKER_POLL_MS,
 } from '../../shared/constants';
 import type { Diagnostic } from '../../shared/contracts';
-import { messages } from '../../shared/messages';
+import { formatUnknownError, messages } from '../../shared/messages';
 import { transitionJob, type JobOperations } from './jobs';
 import type { JobRepository } from './repository';
 import { DiagnosticError, objectRecord, type StoredJob } from './validation';
@@ -16,6 +16,18 @@ interface WorkerDependencies {
   retryDelay(attempt: number): number;
   log(message: Diagnostic): void;
 }
+const safeDocumentation = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || formatUnknownError(value) !== value) return undefined;
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'https:' || url.protocol === 'http:') && !url.username && !url.password
+      ? value
+      : undefined;
+  } catch {
+    // A malformed provider link cannot become a documentation link in the admin.
+    return undefined;
+  }
+};
 export const classifyFailure = (
   failure: unknown
 ): {
@@ -38,11 +50,18 @@ export const classifyFailure = (
       objectRecord(candidate.details) &&
       Object.values(candidate.details).every((value) => typeof value === 'string')
     ) {
+      const details: Record<string, string> = Object.fromEntries(
+        Object.entries(candidate.details).flatMap(([key, value]) =>
+          typeof value === 'string' && formatUnknownError(value) === value ? [[key, value]] : []
+        )
+      );
+      const docs = safeDocumentation(candidate.docs);
       const diagnostic: Diagnostic = {
         code: candidate.code,
         text: candidate.text,
-        details: {},
+        details,
         level: candidate.level === 'warning' ? 'warning' : 'error',
+        ...(docs ? { docs } : {}),
       };
       return {
         diagnostic,
