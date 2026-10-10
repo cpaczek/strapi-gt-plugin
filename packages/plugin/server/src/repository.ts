@@ -89,12 +89,10 @@ export const createRepository = (strapi: Core.Strapi) => {
     until: string
   ): Promise<boolean> => {
     await ensureLease(key);
-    const result: unknown = await strapi.db
-      .query(leaseUid)
-      .updateMany({
-        where: { key, $or: [{ owner: null }, { expiresAt: { $lt: now } }] },
-        data: { owner, expiresAt: until },
-      });
+    const result: unknown = await strapi.db.query(leaseUid).updateMany({
+      where: { key, $or: [{ owner: null }, { expiresAt: { $lt: now } }] },
+      data: { owner, expiresAt: until },
+    });
     return countSchema.parse(result).count === 1;
   };
   const release = async (owner: string): Promise<void> => {
@@ -152,24 +150,20 @@ export const createRepository = (strapi: Core.Strapi) => {
         ...(filters.contentType ? { contentType: filters.contentType } : {}),
         ...(filters.documentId ? { entryDocumentId: filters.documentId } : {}),
       };
-      const rows: unknown = await strapi.db
-        .query(jobUid)
-        .findMany({
-          where,
-          orderBy: { id: 'desc' },
-          limit: JOB_HISTORY_PAGE_SIZE,
-          offset: (filters.page - 1) * JOB_HISTORY_PAGE_SIZE,
-        });
+      const rows: unknown = await strapi.db.query(jobUid).findMany({
+        where,
+        orderBy: { id: 'desc' },
+        limit: JOB_HISTORY_PAGE_SIZE,
+        offset: (filters.page - 1) * JOB_HISTORY_PAGE_SIZE,
+      });
       const total: unknown = await strapi.db.query(jobUid).count({ where });
       return { jobs: z.array(z.unknown()).parse(rows).map(decode), total: z.number().parse(total) };
     },
     async active(key: string): Promise<StoredJob | null> {
-      const row: unknown = await strapi.db
-        .query(jobUid)
-        .findOne({
-          where: { key, status: { $in: ['queued', 'running', 'waiting'] } },
-          orderBy: { id: 'asc' },
-        });
+      const row: unknown = await strapi.db.query(jobUid).findOne({
+        where: { key, status: { $in: ['queued', 'running', 'waiting'] } },
+        orderBy: { id: 'asc' },
+      });
       return row ? decode(row) : null;
     },
     async claim(): Promise<StoredJob | null> {
@@ -196,20 +190,16 @@ export const createRepository = (strapi: Core.Strapi) => {
         for (const row of z.array(z.unknown()).parse(rows)) {
           const job = decode(row);
           if (!(await takeLease(`document:${job.key}`, owner, now, until))) continue;
-          const update: unknown = await strapi.db
-            .query(jobUid)
-            .updateMany({
-              where: { id: job.id, ...due },
-              data: { leaseOwner: owner, leaseUntil: until, status: 'running' },
-            });
+          const update: unknown = await strapi.db.query(jobUid).updateMany({
+            where: { id: job.id, ...due },
+            data: { leaseOwner: owner, leaseUntil: until, status: 'running' },
+          });
           if (countSchema.parse(update).count === 1)
             return { ...job, leaseOwner: owner, leaseUntil: until, status: 'running' };
-          await strapi.db
-            .query(leaseUid)
-            .updateMany({
-              where: { key: `document:${job.key}`, owner },
-              data: { owner: null, expiresAt: null },
-            });
+          await strapi.db.query(leaseUid).updateMany({
+            where: { key: `document:${job.key}`, owner },
+            data: { owner: null, expiresAt: null },
+          });
         }
         await release(owner);
         return null;
@@ -228,19 +218,15 @@ export const createRepository = (strapi: Core.Strapi) => {
     async renew(job: StoredJob): Promise<boolean> {
       const now = new Date().toISOString();
       const until = new Date(Date.now() + JOB_LEASE_MS).toISOString();
-      const result: unknown = await strapi.db
-        .query(jobUid)
-        .updateMany({
-          where: { id: job.id, leaseOwner: job.leaseOwner, leaseUntil: { $gt: now } },
-          data: { leaseUntil: until },
-        });
+      const result: unknown = await strapi.db.query(jobUid).updateMany({
+        where: { id: job.id, leaseOwner: job.leaseOwner, leaseUntil: { $gt: now } },
+        data: { leaseUntil: until },
+      });
       if (countSchema.parse(result).count !== 1) return false;
-      const locks: unknown = await strapi.db
-        .query(leaseUid)
-        .updateMany({
-          where: { owner: job.leaseOwner, expiresAt: { $gt: now } },
-          data: { expiresAt: until },
-        });
+      const locks: unknown = await strapi.db.query(leaseUid).updateMany({
+        where: { owner: job.leaseOwner, expiresAt: { $gt: now } },
+        data: { expiresAt: until },
+      });
       return countSchema.parse(locks).count === 2;
     },
     async completeStage(job: StoredJob): Promise<boolean> {
@@ -251,16 +237,14 @@ export const createRepository = (strapi: Core.Strapi) => {
         updatedAt: new Date().toISOString(),
         status: job.status === 'running' ? 'queued' : job.status,
       };
-      const result: unknown = await strapi.db
-        .query(jobUid)
-        .updateMany({
-          where: {
-            id: job.id,
-            leaseOwner: job.leaseOwner,
-            leaseUntil: { $gt: new Date().toISOString() },
-          },
-          data: jobColumns(updated),
-        });
+      const result: unknown = await strapi.db.query(jobUid).updateMany({
+        where: {
+          id: job.id,
+          leaseOwner: job.leaseOwner,
+          leaseUntil: { $gt: new Date().toISOString() },
+        },
+        data: jobColumns(updated),
+      });
       if (job.leaseOwner) await release(job.leaseOwner);
       return countSchema.parse(result).count === 1;
     },
@@ -274,12 +258,10 @@ export const createRepository = (strapi: Core.Strapi) => {
         leaseOwner: null,
         leaseUntil: null,
       };
-      const changed: unknown = await strapi.db
-        .query(jobUid)
-        .updateMany({
-          where: { id: job.id, status: 'failed', leaseOwner: null },
-          data: jobColumns(next),
-        });
+      const changed: unknown = await strapi.db.query(jobUid).updateMany({
+        where: { id: job.id, status: 'failed', leaseOwner: null },
+        data: jobColumns(next),
+      });
       if (countSchema.parse(changed).count !== 1)
         return fail('Only failed jobs can be retried; start a new translation for changed content');
       return next;
@@ -290,16 +272,14 @@ export const createRepository = (strapi: Core.Strapi) => {
       locale: string,
       variant?: string
     ): Promise<void> {
-      await strapi.db
-        .query(stateUid)
-        .deleteMany({
-          where: {
-            contentType,
-            entryDocumentId: documentId,
-            locale,
-            ...(variant ? { variant } : {}),
-          },
-        });
+      await strapi.db.query(stateUid).deleteMany({
+        where: {
+          contentType,
+          entryDocumentId: documentId,
+          locale,
+          ...(variant ? { variant } : {}),
+        },
+      });
     },
   };
 };
