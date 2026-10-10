@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Button, Flex, Typography } from '@strapi/design-system';
+import { PrimaryButton } from './PrimaryButton';
+import { Flex, Typography } from '@strapi/design-system';
 import type { TranslationOptionsResponse, TranslationRequest } from '../../../shared/contracts';
 import { MAX_DOCUMENTS_PER_REQUEST } from '../../../shared/constants';
 import { messages } from '../../../shared/messages';
@@ -102,7 +103,7 @@ export const TranslationComposer = ({
         </>
       )}
       <Typography textColor="neutral600">{text('translation.cost')}</Typography>
-      <Button
+      <PrimaryButton
         disabled={disabled}
         loading={busy}
         onClick={() =>
@@ -110,7 +111,7 @@ export const TranslationComposer = ({
         }
       >
         {text(force ? 'translation.force' : bulk ? 'translation.bulk' : 'translation.action')}
-      </Button>
+      </PrimaryButton>
     </Flex>
   );
 };

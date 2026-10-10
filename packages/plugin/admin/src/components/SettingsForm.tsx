@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Box, Button, Flex, Typography } from '@strapi/design-system';
+import { PrimaryButton } from './PrimaryButton';
+import { Box, Flex, Typography } from '@strapi/design-system';
 import type {
   ContentTypeSettings,
   FieldRule,
@@ -282,9 +283,9 @@ export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFor
         </Section>
         {canWrite && (
           <Flex justifyContent="flex-end">
-            <Button type="submit" loading={saving} disabled={saving}>
+            <PrimaryButton type="submit" loading={saving} disabled={saving}>
               {text('settings.save')}
-            </Button>
+            </PrimaryButton>
           </Flex>
         )}
       </Flex>

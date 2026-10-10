@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Button, Flex, Typography } from '@strapi/design-system';
+import { Box, Button, Flex, Main, Typography } from '@strapi/design-system';
 import { useRBAC } from '@strapi/strapi/admin';
 import { JOB_HISTORY_PAGE_SIZE, PERMISSIONS, UI_POLL_MS } from '../../../shared/constants';
 import { messages } from '../../../shared/messages';
@@ -21,14 +21,21 @@ export const JobsPage = () => {
   const [page, setPage] = useState(1);
   const resource = useResource(allowed ? `/jobs?page=${page}` : null, jobsSchema, UI_POLL_MS);
   const mutation = useMutation();
-  if (permissions.isLoading) return <Loading />;
-  if (!allowed || permissions.error) return <Notice diagnostic={messages.permissionDenied()} />;
+  if (permissions.isLoading || !allowed || permissions.error)
+    return (
+      <Main padding={8}>
+        <Typography tag="h1" variant="alpha" id="main-content-title">
+          {text('jobs.title')}
+        </Typography>
+        {permissions.isLoading ? <Loading /> : <Notice diagnostic={messages.permissionDenied()} />}
+      </Main>
+    );
   return (
-    <Box padding={8}>
+    <Main padding={8}>
       <Flex direction="column" alignItems="stretch" gap={6}>
         <Flex justifyContent="space-between" gap={4}>
           <Box>
-            <Typography tag="h1" variant="alpha">
+            <Typography tag="h1" variant="alpha" id="main-content-title">
               {text('jobs.title')}
             </Typography>
             <Box paddingTop={2}>
@@ -83,6 +90,6 @@ export const JobsPage = () => {
           </Box>
         )}
       </Flex>
-    </Box>
+    </Main>
   );
 };
