@@ -168,9 +168,10 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 const isTranslationRuntime = (
   value: unknown
-): value is Pick<PluginRuntime, 'enqueue' | 'worker' | 'repository'> =>
+): value is Pick<PluginRuntime, 'enqueue' | 'retry' | 'worker' | 'repository'> =>
   record(value) &&
   typeof value.enqueue === 'function' &&
+  typeof value.retry === 'function' &&
   record(value.worker) &&
   typeof value.worker.stop === 'function' &&
   typeof value.worker.execute === 'function' &&
@@ -552,5 +553,77 @@ describe('atomic concurrent enqueue', () => {
       expect.objectContaining({ actorId: owner.id }),
     ]);
     expect(paidRequests()).toBe(before);
+  });
+  it('does not revive an older failed job while newer work owns the same document and locale', async () => {
+    const actor = await createEditor();
+    const source = await createSource();
+    const service = translationRuntime();
+    const first = await service.enqueue(
+      translationRequest([source.documentId]),
+      actor.id,
+      'translate'
+    );
+    const failedId = first.jobs[0]?.id;
+    if (!failedId || !runtime.mock) throw new Error('Missing queued job or mock');
+    runtime.mock.failNext({ status: 400 });
+    await service.worker.execute();
+    expect(await service.repository.get(failedId)).toMatchObject({ status: 'failed' });
+    const next = await service.enqueue(
+      translationRequest([source.documentId]),
+      actor.id,
+      'translate'
+    );
+    const before = paidRequests();
+    await expect(service.retry(failedId, actor.id)).rejects.toMatchObject({
+      diagnostic: { code: 'validation' },
+    });
+    const jobs = await activeJobs([source.documentId]);
+    expect(jobs.map((job) => job.id)).toEqual(next.jobs.map((job) => job.id));
+    expect(await service.repository.get(failedId)).toMatchObject({ status: 'failed' });
+    const job = jobs[0];
+    if (!job) throw new Error('Missing active job');
+    await finishTranslation(job.id);
+    expect(paidRequests() - before).toBe(1);
+  });
+  it('serializes a retry racing a new enqueue without duplicate paid work', async () => {
+    const actor = await createEditor();
+    const source = await createSource();
+    const service = translationRuntime();
+    const first = await service.enqueue(
+      translationRequest([source.documentId]),
+      actor.id,
+      'translate'
+    );
+    const failedId = first.jobs[0]?.id;
+    if (!failedId || !runtime.mock) throw new Error('Missing queued job or mock');
+    runtime.mock.failNext({ status: 400 });
+    await service.worker.execute();
+    expect(await service.repository.get(failedId)).toMatchObject({ status: 'failed' });
+    const before = paidRequests();
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const requests = [
+      async () => service.retry(failedId, actor.id),
+      async () => service.enqueue(translationRequest([source.documentId]), actor.id, 'translate'),
+    ].map(async (request) => {
+      await gate;
+      return request();
+    });
+    release();
+    const results = await Promise.allSettled(requests);
+    expect(results.some((result) => result.status === 'fulfilled')).toBe(true);
+    const jobs = await activeJobs([source.documentId]);
+    expect(jobs).toHaveLength(1);
+    const job = jobs[0];
+    if (!job) throw new Error('Missing active job');
+    for (const result of results) {
+      if (result.status === 'fulfilled')
+        expect(result.value.jobs.map((item) => item.id)).toEqual([job.id]);
+      else expect(result.reason).toMatchObject({ diagnostic: { code: 'validation' } });
+    }
+    await finishTranslation(job.id);
+    expect(paidRequests() - before).toBe(1);
   });
 });
