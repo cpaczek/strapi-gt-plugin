@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLiveProcesses } from './testbed/live-demo.mjs';
+import { createLiveProcesses } from './testbed/live-demo';
 
 const environment = {
   GT_API_KEY: 'server-only-test-key',
@@ -51,6 +51,11 @@ describe('real GT example launcher', () => {
   it('rejects ports that collide with each other', () => {
     expect(() =>
       createLiveProcesses('/repo', { ...environment, LIVE_READER_PORT: '1537' })
+    ).toThrow();
+  });
+  it('normalizes leading zeros before checking port collisions', () => {
+    expect(() =>
+      createLiveProcesses('/repo', { ...environment, LIVE_READER_PORT: '01537' })
     ).toThrow();
   });
   it('removes unrelated API authentication from the public reader', () => {

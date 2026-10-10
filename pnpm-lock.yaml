@@ -352,6 +352,9 @@ importers:
       oxlint:
         specifier: 'catalog:'
         version: 1.87.0
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
       turbo:
         specifier: 'catalog:'
         version: 2.11.7
