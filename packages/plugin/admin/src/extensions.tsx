@@ -1,3 +1,5 @@
+import { Button, Flex } from '@strapi/design-system';
+import { Loading, Notice } from './components/Controls';
 import { useRBAC } from '@strapi/strapi/admin';
 import type {
   BulkActionComponent,
@@ -68,17 +70,27 @@ export const TranslationPanel: PanelComponent = ({ documentId, document, model, 
   const allowed =
     !permission.isLoading && !permission.error && permission.allowedActions.canTranslate;
   const resource = useResource(allowed ? '/translation-options' : null, optionsSchema);
-  if (
-    !allowed ||
-    !documentId ||
-    !resource.result?.contentTypes.some((schema) => schema.uid === model && schema.localized)
-  )
+  if (!allowed || !documentId) return null;
+  if (resource.error)
+    return {
+      title: text('translation.panel'),
+      content: (
+        <Flex direction="column" alignItems="stretch" gap={3}>
+          <Notice diagnostic={resource.error} />
+          <Button variant="secondary" onClick={resource.refresh}>
+            {text('common.retry')}
+          </Button>
+        </Flex>
+      ),
+    };
+  if (resource.loading) return { title: text('translation.panel'), content: <Loading /> };
+  if (!resource.result?.contentTypes.some((schema) => schema.uid === model && schema.localized))
     return null;
   return {
     title: text('translation.panel'),
     content: (
       <DocumentPanel
-        key={`${model}:${documentId}`}
+        key={`${model}:${documentId}:${document?.locale ?? ''}:${activeTab}`}
         model={model}
         documentId={documentId}
         options={resource.result}

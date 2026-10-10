@@ -20,7 +20,17 @@ export interface SettingsFormProps {
 }
 export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFormProps) => {
   const text = useText();
-  const [settings, setSettings] = useState(response.settings);
+  const [settings, setSettings] = useState<PluginSettings>(() => ({
+    ...response.settings,
+    contentTypes: {
+      ...Object.fromEntries(
+        response.contentTypes
+          .filter((schema) => schema.localized)
+          .map((schema) => [schema.uid, DEFAULT_CONTENT_TYPE_SETTINGS])
+      ),
+      ...response.settings.contentTypes,
+    },
+  }));
   const disabled = !canWrite || saving;
   const update = (change: Partial<PluginSettings>) =>
     setSettings((current) => ({ ...current, ...change }));
@@ -190,7 +200,20 @@ export const SettingsForm = ({ response, canWrite, saving, onSave }: SettingsFor
                                   disabled={disabled || !rule.translate}
                                   onChange={(uidStrategy) => {
                                     if (uidStrategy === 'copy' || uidStrategy === 'regenerate')
-                                      updateField(schema.uid, path, { uidStrategy }, true);
+                                      updateField(
+                                        schema.uid,
+                                        path,
+                                        {
+                                          uidStrategy,
+                                          ...(uidStrategy === 'regenerate'
+                                            ? {
+                                                sourceField:
+                                                  rule.sourceField ?? field.targetField ?? '',
+                                              }
+                                            : {}),
+                                        },
+                                        true
+                                      );
                                   }}
                                 />
                                 <TextField
