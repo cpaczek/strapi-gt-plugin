@@ -78,18 +78,38 @@ const stop = async (code: number): Promise<void> => {
   if (state.closing) return;
   state.closing = true;
   for (const child of children) {
-    if (child.pid && child.exitCode === null) process.kill(-child.pid, 'SIGTERM');
+    if (child.pid && child.exitCode === null) {
+      try {
+        process.kill(-child.pid, 'SIGTERM');
+      } catch (failure) {
+        if (!(failure instanceof Error && 'code' in failure && failure.code === 'ESRCH'))
+          throw failure;
+      }
+    }
   }
   await Promise.all(
-    children.map((child) => (child.exitCode === null ? once(child, 'exit') : Promise.resolve()))
+    children.map((child) =>
+      child.pid && child.exitCode === null ? once(child, 'exit') : Promise.resolve()
+    )
   );
   process.exitCode = code;
 };
+const report = (failure: unknown): void => {
+  process.stderr.write(
+    buildMessage({
+      code: 'mock-demo-failed',
+      happened: 'The mock demo could not continue',
+      fix: 'Check the local server output and port settings',
+      details: { reason: formatUnknownError(failure) },
+    }).text + '\n'
+  );
+  process.exitCode = 1;
+};
 process.once('SIGINT', () => {
-  void stop(0);
+  void stop(0).catch(report);
 });
 process.once('SIGTERM', () => {
-  void stop(0);
+  void stop(0).catch(report);
 });
 for (const child of children) {
   child.once('error', (error) => {
@@ -104,9 +124,9 @@ for (const child of children) {
         }).text
       }\n`
     );
-    void stop(1);
+    void stop(1).catch(report);
   });
   child.once('exit', (code) => {
-    if (!state.closing) void stop(code ?? 1);
+    if (!state.closing) void stop(code || 1).catch(report);
   });
 }
