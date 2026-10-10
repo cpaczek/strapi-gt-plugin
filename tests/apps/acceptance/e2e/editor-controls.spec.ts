@@ -502,6 +502,13 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
   page,
   editor,
 }) => {
+  await page.route('**/general-translation/connection', (route) =>
+    route.fulfill({
+      status: 400,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: messages.invalidKey() }),
+    })
+  );
   try {
     for (const language of [
       { code: 'fr', name: 'Français' },
@@ -533,7 +540,9 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
         );
       const projectLabel = dictionary['settings.project'];
       const saveLabel = dictionary['settings.save'];
-      if (!projectLabel || !saveLabel)
+      const connectionLabel = dictionary['settings.test'];
+      const rejectedLabel = dictionary['diagnostic.invalid-key.happened'];
+      if (!projectLabel || !saveLabel || !connectionLabel || !rejectedLabel)
         throw new Error('The translated settings labels are unavailable');
       await page.getByRole('link').and(page.locator('[href="/admin/settings"]')).click();
       await page
@@ -542,6 +551,9 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
         .click();
       await expect(page.getByRole('textbox', { name: projectLabel, exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: saveLabel, exact: true })).toBeVisible();
+      await page.getByRole('button', { name: connectionLabel, exact: true }).click();
+      await expect(page.getByText(rejectedLabel)).toBeVisible();
+      await expect(page.getByText(messages.invalidKey().text, { exact: true })).toHaveCount(0);
       await assertAccessible(page);
     }
   } finally {

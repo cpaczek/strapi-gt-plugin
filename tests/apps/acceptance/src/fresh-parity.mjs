@@ -25,6 +25,12 @@ const sharedDirectory = resolve(directory, 'packages/plugin/shared');
 await mkdir(sharedDirectory, { recursive: true });
 for (const name of ['messages.ts', 'constants.ts', 'contracts.ts'])
   await cp(resolve(root, 'packages/plugin/shared', name), resolve(sharedDirectory, name));
+const translationDirectory = resolve(directory, 'packages/plugin/admin/src/translations');
+await mkdir(translationDirectory, { recursive: true });
+await cp(
+  resolve(root, 'packages/plugin/admin/src/translations/en.json'),
+  resolve(translationDirectory, 'en.json')
+);
 for (const path of ['app', 'lib', 'package.json', 'tsconfig.json', 'next.config.ts'])
   await cp(resolve(root, 'playground-next', path), resolve(readerDirectory, path), {
     recursive: true,
