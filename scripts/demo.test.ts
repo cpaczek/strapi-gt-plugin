@@ -133,6 +133,7 @@ server.listen(0, '127.0.0.1', () => {
 });
 process.once('SIGTERM', () => server.close());
 process.once('SIGUSR2', () => server.close());
+process.once('SIGUSR1', () => process.kill(process.pid, 'SIGKILL'));
 `
     );
     await chmod(executable, 0o700);
@@ -222,6 +223,20 @@ it('reports an unexpected child exit zero as failure and cleans up siblings', as
     if (child === undefined) throw new Error('The owned child did not start');
     process.kill(child, 'SIGUSR2');
     expect(await probe.waitForExit()).toBe(1);
+    await probe.noOrphans();
+  } finally {
+    await probe.cleanup();
+  }
+});
+
+it('reports failure when a child terminates itself by signal', async () => {
+  const probe = await lifecycleProbe();
+  try {
+    const [child] = await probe.ready();
+    if (child === undefined) throw new Error('The owned child did not start');
+    process.kill(child, 'SIGUSR1');
+    expect(await probe.waitForExit()).toBe(1);
+    expect(probe.output.unhandled).toBe(false);
     await probe.noOrphans();
   } finally {
     await probe.cleanup();
