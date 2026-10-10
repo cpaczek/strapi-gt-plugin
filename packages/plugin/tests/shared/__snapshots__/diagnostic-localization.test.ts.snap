@@ -126,7 +126,7 @@ exports[`canonical diagnostic wording > keeps every existing English diagnostic 
       "reason": "Select a content type",
     },
     "level": "error",
-    "text": "General Translation: The translation request is not valid. Correct the highlighted settings and try again. Select a content type.",
+    "text": "General Translation: The translation request is not valid. Review the request details, correct the settings or content, and try again. Select a content type.",
   },
   {
     "code": "provider-failure",

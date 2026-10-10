@@ -22,6 +22,7 @@ export default defineConfig({
           command: 'node --import tsx ../../../scripts/testbed/demo.ts --isolated',
           url: `${readerUrl}/api/health`,
           reuseExistingServer: false,
+          env: { TESTBED_MOCK_CONTROLS: 'true' },
           gracefulShutdown: { signal: 'SIGTERM', timeout: 10_000 },
           timeout: 180_000,
         },

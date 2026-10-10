@@ -161,12 +161,14 @@
   "diagnostic.network-failure.happened": "No se pudo completar la solicitud a GT",
   "diagnostic.network-failure.fix": "Comprueba la conexión de red del servidor y vuelve a intentar la tarea",
   "diagnostic.validation.happened": "La solicitud de traducción no es válida",
-  "diagnostic.validation.fix": "Corrige los ajustes resaltados y vuelve a intentarlo",
+  "diagnostic.validation.fix": "Revisa los detalles de la solicitud, corrige la configuración o el contenido e inténtalo de nuevo",
   "diagnostic.provider-failure.happened": "GT no pudo traducir el contenido",
   "diagnostic.provider-failure.fix": "Revisa los detalles de la tarea y vuelve a intentarlo tras corregir la causa",
   "diagnostic.missing-locale.happened": "La configuración regional de destino no existe para este documento",
   "diagnostic.missing-locale.fix": "Activa la creación de configuraciones regionales que falten y confirma que tienes permiso de creación",
   "diagnostic.source-locale-mismatch.happened": "El proyecto de GT utiliza una configuración regional de origen diferente",
   "diagnostic.source-locale-mismatch.fix": "Selecciona el proyecto de GT correspondiente antes de cargar los archivos de traducción",
-  "diagnostic.documentation": "Documentación"
+  "diagnostic.documentation": "Documentación",
+  "diagnostic.conflict-recovery.happened": "Esta traducción necesita una nueva solicitud",
+  "diagnostic.conflict-recovery.fix": "Revisa este documento en Content Manager e inicia una nueva traducción"
 }

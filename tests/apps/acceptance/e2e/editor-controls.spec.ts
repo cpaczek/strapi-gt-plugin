@@ -11,6 +11,7 @@ import {
   type Locator,
 } from '@playwright/test';
 import { z } from 'zod';
+import { readMockControls } from '../src/mock-controls';
 import { messages } from '../../../../packages/plugin/shared/messages';
 import { jobsSchema, enqueueSchema } from '../../../../packages/plugin/admin/src/api';
 import { assertAccessible } from './accessibility';
@@ -21,6 +22,8 @@ import {
   openTranslation,
   dismissEditorTour,
   openSettings,
+  saveSettings,
+  sourceTitle,
   signIn,
   type TestAccount,
 } from './editor-session';
@@ -445,6 +448,205 @@ test('human target edits survive normal translation and force requires consent',
   );
 });
 
+const clearFieldContexts = async (page: Page) => {
+  await openSettings(page);
+  const contexts = page.getByRole('textbox', { name: /^Context for / });
+  expect(await contexts.count()).toBeGreaterThan(0);
+  for (const context of await contexts.all()) if (await context.isEnabled()) await context.fill('');
+  await saveSettings(page);
+};
+const largeSummary = 'Enderman 🧱 keeps this field note for the editorial archive. '.repeat(180);
+const readDocumentJobs = async (api: APIRequestContext, documentId: string) => {
+  const query = new URLSearchParams({ contentType: model, documentId });
+  const response = await api.get(`/general-translation/jobs?${query}`);
+  expect(response.status()).toBe(200);
+  return jobsSchema.parse(await response.json()).jobs;
+};
+const awaitTerminalJobs = async (api: APIRequestContext, documentId: string, ids: number[]) => {
+  await expect
+    .poll(
+      async () => {
+        const jobs = (await readDocumentJobs(api, documentId)).filter((job) =>
+          ids.includes(job.id)
+        );
+        return (
+          jobs.length === ids.length &&
+          jobs.every((job) => ['succeeded', 'failed', 'conflict'].includes(job.status))
+        );
+      },
+      { timeout: 60_000 }
+    )
+    .toBe(true);
+  return (await readDocumentJobs(api, documentId)).filter((job) => ids.includes(job.id));
+};
+
+test('a large article translates through files after the editor clears field context', async ({
+  page,
+  editor,
+}) => {
+  const control = await readMockControls();
+  const before = await control.counters();
+  const source = await editor.createSource('Large article cleared context');
+  await clearFieldContexts(page);
+  await openDocument(page, source);
+  await page.getByRole('textbox', { name: /^summary$/i }).fill(largeSummary);
+  await saveDocument(page);
+  const ids = await queueFrench(page);
+  const jobs = await awaitTerminalJobs(editor.api, source.documentId, ids);
+  expect(jobs.map((job) => job.status)).toEqual(['succeeded']);
+  const after = await control.counters();
+  expect(after.uploads).toBeGreaterThan(before.uploads);
+  expect(after.enqueues).toBeGreaterThan(before.enqueues);
+  expect(after.downloads).toBeGreaterThan(before.downloads);
+  expect(after.runtimeRequests).toBe(before.runtimeRequests);
+  await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+  await expect(page.getByRole('textbox', { name: /^summary$/i })).toHaveValue(
+    `[fr] ${largeSummary}`
+  );
+  await assertAccessible(page, 'section[aria-label="General Translation controls"]');
+});
+
+test('a genuine source conflict requires review and a new editor translation', async ({
+  page,
+  editor,
+}) => {
+  const control = await readMockControls();
+  const source = await editor.createSource('Conflict recovery');
+  await clearFieldContexts(page);
+  await openDocument(page, source);
+  await page.getByRole('textbox', { name: /^summary$/i }).fill(largeSummary);
+  await saveDocument(page);
+  await control.setJobStatus('processing');
+  try {
+    const ids = await queueFrench(page);
+    await expect
+      .poll(
+        async () =>
+          (await readDocumentJobs(editor.api, source.documentId)).find((job) =>
+            ids.includes(job.id)
+          )?.status
+      )
+      .toBe('waiting');
+    const revision = `${largeSummary} The editor saved a later revision.`;
+    await page.getByRole('textbox', { name: /^summary$/i }).fill(revision);
+    await saveDocument(page);
+    await control.setJobStatus('completed');
+    const conflicted = await awaitTerminalJobs(editor.api, source.documentId, ids);
+    expect(conflicted.map((job) => job.status)).toEqual(['conflict']);
+    await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
+    const row = page.getByRole('row').filter({ hasText: source.documentId });
+    await expect(row.getByText('Needs review', { exact: true })).toBeVisible();
+    await expect(row.getByRole('button', { name: /Retry job/ })).toHaveCount(0);
+    await expect(
+      row.getByText(/Review this document in Content Manager and start a new translation/)
+    ).toBeVisible();
+    await assertAccessible(page);
+    await row
+      .getByText(/Review this document in Content Manager and start a new translation/)
+      .scrollIntoViewIfNeeded();
+    await page.screenshot({
+      path: '../../../.work/screenshots/review-conflict-recovery.png',
+      fullPage: true,
+    });
+    const manager = page.getByRole('link', { name: 'Content Manager', exact: true });
+    await manager.focus();
+    await manager.press('Enter');
+    await page.getByRole('link', { name: 'Article', exact: true }).click();
+    const documentLink = page
+      .getByRole('row')
+      .filter({ has: page.getByText(source.title, { exact: true }) })
+      .getByRole('link')
+      .first();
+    await documentLink.focus();
+    await documentLink.press('Enter');
+    await expect(page.getByRole('textbox', { name: /^summary$/i })).toHaveValue(revision);
+    const newIds = await queueFrench(page);
+    expect(newIds.every((id) => !ids.includes(id))).toBe(true);
+    const recovered = await awaitTerminalJobs(editor.api, source.documentId, newIds);
+    expect(recovered.map((job) => job.status)).toEqual(['succeeded']);
+    await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+    await expect(page.getByRole('textbox', { name: /^summary$/i })).toHaveValue(`[fr] ${revision}`);
+  } finally {
+    await control.setJobStatus('completed');
+  }
+});
+
+test('a worker source-locale failure retains its detail in English and French history', async ({
+  page,
+  editor,
+}) => {
+  const source = await editor.createSource('Source locale diagnostic');
+  await clearFieldContexts(page);
+  await openDocument(page, source);
+  await page.getByRole('textbox', { name: /^summary$/i }).fill(largeSummary);
+  await saveDocument(page);
+  const first = await queueFrench(page);
+  expect(
+    (await awaitTerminalJobs(editor.api, source.documentId, first)).map((job) => job.status)
+  ).toEqual(['succeeded']);
+  await openSettings(page);
+  await page.getByRole('combobox', { name: 'Source locale', exact: true }).click();
+  await page.getByRole('option', { name: 'French (fr)', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'English (en)', exact: true }).uncheck();
+  await page.getByRole('checkbox', { name: 'Arabic (ar)', exact: true }).check();
+  await saveSettings(page);
+  await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+  await openTranslation(page);
+  const modal = page.getByRole('dialog', { name: 'Translate content' });
+  await expect(modal.getByRole('checkbox', { name: 'Arabic (ar)', exact: true })).toBeChecked();
+  const queued = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === '/general-translation/translate' &&
+      response.request().method() === 'POST'
+  );
+  await modal.getByRole('button', { name: 'Translate', exact: true }).click();
+  const response = await queued;
+  expect(response.status()).toBe(200);
+  const ids = enqueueSchema.parse(await response.json()).jobs.map((job) => job.id);
+  const failed = await awaitTerminalJobs(editor.api, source.documentId, ids);
+  expect(
+    failed.map((job) => ({
+      status: job.status,
+      code: job.error?.code,
+      locale: job.error?.details.locale,
+    }))
+  ).toEqual([{ status: 'failed', code: 'source-locale-mismatch', locale: 'en' }]);
+  await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
+  await expect(
+    page.getByText(messages.sourceLocaleMismatch('en').text, { exact: true })
+  ).toBeVisible();
+  await assertAccessible(page);
+  try {
+    await page.goto(`${adminOrigin}/admin/me`);
+    await page.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: 'Français', exact: true }).click();
+    const saved = page.waitForResponse(
+      (incoming) =>
+        new URL(incoming.url()).pathname === '/admin/users/me' &&
+        incoming.request().method() === 'PUT'
+    );
+    await page.locator('button[type="submit"]').click();
+    expect((await saved).status()).toBe(200);
+    await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
+    await page.getByRole('main').focus();
+    await expect(
+      page.getByText(
+        'General Translation: Le projet GT utilise une langue source différente. Sélectionnez le projet GT correspondant avant de téléverser les fichiers de traduction. en.',
+        { exact: true }
+      )
+    ).toBeVisible();
+    await assertAccessible(page);
+    await page.screenshot({
+      path: '../../../.work/screenshots/review-worker-diagnostic-fr.png',
+      fullPage: true,
+    });
+  } finally {
+    expect(
+      (await editor.api.put('/admin/users/me', { data: { preferedLanguage: 'en' } })).status()
+    ).toBe(200);
+  }
+});
+
 test('source publication can automatically publish the translated locale', async ({
   page,
   editor,
@@ -604,6 +806,10 @@ test('shows real server validation when the project ID exceeds its allowed lengt
   await page.getByRole('button', { name: 'Save settings', exact: true }).click();
   expect((await response).status()).toBe(400);
   await expect(page.getByText(/The translation request is not valid/)).toBeVisible();
+  await expect(
+    page.getByText(/Review the request details, correct the settings or content, and try again/)
+  ).toBeVisible();
+  await expect(page.getByText(/highlighted settings/)).toHaveCount(0);
   expect((await editor.api.get('/general-translation/settings')).status()).toBe(200);
   await assertAccessible(page);
 });
@@ -612,6 +818,39 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
   page,
   editor,
 }) => {
+  await configureTranslation(page, { mediaMetadata: true });
+  const source = await editor.createSource('Localized metadata labels');
+  const query = new URLSearchParams({
+    locale: 'en',
+    status: 'published',
+    populate: 'cover',
+    'filters[title][$eq]': sourceTitle,
+  });
+  const published = await fetch(`${adminOrigin}/api/articles?${query}`);
+  expect(published.status).toBe(200);
+  const asset = z
+    .object({
+      data: z.array(
+        z.object({
+          cover: z.object({
+            id: z.number(),
+            alternativeText: z.string().nullable(),
+            caption: z.string().nullable(),
+          }),
+        })
+      ),
+    })
+    .parse(await published.json()).data[0]?.cover;
+  if (!asset) throw new Error('The seeded article cover is unavailable');
+  expect(
+    (
+      await editor.api.put(`${collection}/${source.documentId}?locale=en`, {
+        data: { cover: asset.id },
+      })
+    ).status()
+  ).toBe(200);
+  await openDocument(page, source);
+  await waitForJobs(editor.api, [source.documentId], await queueFrench(page));
   await page.route('**/general-translation/connection', (route) =>
     route.fulfill({
       status: 400,
@@ -665,6 +904,74 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
       await expect(page.getByText(rejectedLabel)).toBeVisible();
       await expect(page.getByText(messages.invalidKey().text, { exact: true })).toHaveCount(0);
       await assertAccessible(page);
+      const labels =
+        language.code === 'fr'
+          ? {
+              alt: 'Valeur localisée (texte alternatif) : cover',
+              caption: 'Valeur localisée (légende) : cover',
+            }
+          : language.code === 'ar'
+            ? {
+                alt: 'القيمة الموطّنة لـ نص بديل: cover',
+                caption: 'القيمة الموطّنة لـ تعليق توضيحي: cover',
+              }
+            : undefined;
+      if (labels) {
+        const controlsLabel = dictionary['translation.controls'];
+        const mediaLabel = dictionary['media.title'];
+        const chooseLabel = dictionary['translation.open'];
+        const forceLabel = dictionary['translation.force'];
+        if (!controlsLabel || !mediaLabel || !chooseLabel || !forceLabel)
+          throw new Error('Translated editor labels are unavailable');
+        await openDocument(page, source);
+        const controls = page.getByRole('region', { name: controlsLabel, exact: true });
+        await controls.getByRole('button', { name: mediaLabel, exact: true }).click();
+        const alternativeText = controls.getByRole('textbox', { name: labels.alt, exact: true });
+        await expect(alternativeText).toHaveValue(`[fr] ${asset.alternativeText}`);
+        await expect(
+          controls.getByRole('textbox', { name: labels.caption, exact: true })
+        ).toHaveValue(`[fr] ${asset.caption}`);
+        await alternativeText.focus();
+        await expect(alternativeText).toBeFocused();
+        await alternativeText.press('Tab');
+        await expect(controls.getByRole('checkbox').first()).toBeFocused();
+        if (language.code === 'fr') {
+          await controls.getByRole('button', { name: chooseLabel, exact: true }).click();
+          const force = controls.getByRole('checkbox', { name: forceLabel, exact: true });
+          await force.focus();
+          await force.press('Space');
+          await expect(force).toBeChecked();
+          await expect(
+            controls.getByText(
+              /^General Translation: Forcer une nouvelle traduction peut remplacer les modifications humaines dans les langues sélectionnées\./
+            )
+          ).toBeVisible();
+          await expect(
+            controls.getByRole('button', { name: forceLabel, exact: true })
+          ).toBeDisabled();
+          await controls
+            .getByText(/^General Translation: Forcer une nouvelle traduction/)
+            .scrollIntoViewIfNeeded();
+          await page.screenshot({ path: '../../../.work/screenshots/review-force-fr.png' });
+        } else {
+          await expect(
+            controls.getByText(`القيمة الأصلية لـ نص بديل: ${asset.alternativeText}`, {
+              exact: true,
+            })
+          ).toBeVisible();
+          await expect(
+            controls.getByText(`القيمة الأصلية لـ تعليق توضيحي: ${asset.caption}`, { exact: true })
+          ).toBeVisible();
+        }
+        await assertAccessible(page, `section[aria-label=${JSON.stringify(controlsLabel)}]`);
+        await controls
+          .getByRole('textbox', { name: labels.caption, exact: true })
+          .scrollIntoViewIfNeeded();
+        await page.screenshot({
+          path: `../../../.work/screenshots/review-metadata-${language.code}.png`,
+          fullPage: true,
+        });
+      }
     }
   } finally {
     expect(

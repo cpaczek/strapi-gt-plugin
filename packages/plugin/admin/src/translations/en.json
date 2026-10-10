@@ -161,12 +161,14 @@
   "diagnostic.network-failure.happened": "The GT request could not finish",
   "diagnostic.network-failure.fix": "Check the server network connection and retry the job",
   "diagnostic.validation.happened": "The translation request is not valid",
-  "diagnostic.validation.fix": "Correct the highlighted settings and try again",
+  "diagnostic.validation.fix": "Review the request details, correct the settings or content, and try again",
   "diagnostic.provider-failure.happened": "GT could not translate the content",
   "diagnostic.provider-failure.fix": "Review the job details and retry after correcting the cause",
   "diagnostic.missing-locale.happened": "The target locale does not exist for this document",
   "diagnostic.missing-locale.fix": "Enable creation of missing locales and confirm your create permission",
   "diagnostic.source-locale-mismatch.happened": "The GT project uses a different source locale",
   "diagnostic.source-locale-mismatch.fix": "Select the matching GT project before uploading translation files",
-  "diagnostic.documentation": "Documentation"
+  "diagnostic.documentation": "Documentation",
+  "diagnostic.conflict-recovery.happened": "This translation needs a new request",
+  "diagnostic.conflict-recovery.fix": "Review this document in Content Manager and start a new translation"
 }
