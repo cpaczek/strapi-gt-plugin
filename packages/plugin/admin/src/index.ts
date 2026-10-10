@@ -11,6 +11,12 @@ import { TranslateAction, TranslateBulkAction, TranslationPanel } from './extens
 import { descriptor } from './i18n';
 import english from './translations/en.json';
 
+const translations = new Map<string, () => Promise<{ default: typeof english }>>([
+  ['es', () => import('./translations/es.json')],
+  ['fr', () => import('./translations/fr.json')],
+  ['ar', () => import('./translations/ar.json')],
+]);
+
 interface ContentManagerApi {
   addDocumentAction: (actions: DocumentActionComponent[]) => void;
   addBulkAction: (actions: BulkActionComponent[]) => void;
@@ -52,11 +58,17 @@ export default {
     api.addEditViewSidePanel([TranslationPanel]);
   },
   async registerTrads({ locales }: { locales: string[] }) {
-    return locales.map((locale) => ({
-      locale,
-      data: Object.fromEntries(
-        Object.entries(english).map(([key, value]) => [`${PLUGIN_ID}.${key}`, value])
-      ),
-    }));
+    return Promise.all(
+      locales.map(async (locale) => {
+        const loader = translations.get(locale.toLowerCase().split('-')[0] ?? locale);
+        const dictionary = loader ? (await loader()).default : english;
+        return {
+          locale,
+          data: Object.fromEntries(
+            Object.entries(dictionary).map(([key, value]) => [`${PLUGIN_ID}.${key}`, value])
+          ),
+        };
+      })
+    );
   },
 };
