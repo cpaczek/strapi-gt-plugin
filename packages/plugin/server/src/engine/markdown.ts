@@ -1,8 +1,11 @@
 import { fromMarkdown } from 'mdast-util-from-markdown';
+import { gfmFromMarkdown } from 'mdast-util-gfm';
+import { gfm } from 'micromark-extension-gfm';
 import { invalidTranslation } from './errors';
 
 interface MarkdownNode {
   type: string;
+  value?: string;
   position?: { start: { offset?: number }; end: { offset?: number } };
   children?: readonly MarkdownNode[];
 }
@@ -12,13 +15,25 @@ export interface MarkdownSpan {
   text: string;
 }
 
+const parseMarkdown = (source: string) =>
+  fromMarkdown(source, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] });
+
+const syntaxShape = (node: MarkdownNode): string => {
+  const { children, position: _position, value, ...attributes } = node;
+  return JSON.stringify([
+    attributes,
+    node.type === 'text' ? null : (value ?? null),
+    children?.map(syntaxShape) ?? [],
+  ]);
+};
+
 export const markdownSpans = (source: string): MarkdownSpan[] => {
   const spans: MarkdownSpan[] = [];
   const visit = (node: MarkdownNode): void => {
     const start = node.position?.start.offset;
     const end = node.position?.end.offset;
     if (start === undefined || end === undefined) return;
-    if (node.type === 'link' && source[start] === '<') return;
+    if (node.type === 'link' && source[start] !== '[') return;
     if (node.type === 'text') {
       const raw = source.slice(start, end);
       // Keep raw escapes, entities and line boundaries out of translated spans.
@@ -45,7 +60,7 @@ export const markdownSpans = (source: string): MarkdownSpan[] => {
     }
     for (const child of node.children ?? []) visit(child);
   };
-  visit(fromMarkdown(source));
+  visit(parseMarkdown(source));
   return spans;
 };
 
@@ -62,11 +77,16 @@ export const replaceMarkdown = (
       throw invalidTranslation('A Markdown translation is missing');
     if (/[\r\n]/.test(replacement))
       throw invalidTranslation('A Markdown text translation added a line break');
+    if (!replacement.trim())
+      throw invalidTranslation('A Markdown text translation cannot be empty');
     const safe =
       replacement === span.text
         ? replacement
-        : replacement.replace(/([\\`*_[\]{}()<>#+.!|~&-])/g, '\\$1');
+        : replacement.trim().replace(/([!"#$%&'()*+,\-./:;<=>?@[\]\\^_`{|}~])/g, '\\$1');
     result = result.slice(0, span.start) + safe + result.slice(span.end);
+  }
+  if (syntaxShape(parseMarkdown(source)) !== syntaxShape(parseMarkdown(result))) {
+    throw invalidTranslation('The translated Markdown changed the original formatting structure');
   }
   return result;
 };

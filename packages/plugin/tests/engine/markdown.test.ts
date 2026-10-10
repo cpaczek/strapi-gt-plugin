@@ -50,21 +50,27 @@ describe('Markdown syntax boundaries', () => {
     expect(prepared.segments.map((entry) => entry.text)).toEqual(['Visit', 'or', 'and write', '.']);
     expect(apply(prepared, identity(prepared.segments)).patch.body).toBe(body);
   });
-  it('does not permit provider text to create new autolinks or indented code', () => {
+  it('does not permit provider indentation to create code', () => {
     const prepared = prepare(prepareInput({ body: 'Hello' }));
     const result = apply(
       prepared,
-      Object.fromEntries(
-        prepared.segments.map((entry) => [
-          entry.id,
-          '    https://bad.example.com editor@example.com  ',
-        ])
-      )
+      Object.fromEntries(prepared.segments.map((entry) => [entry.id, '    Indented words  ']))
     ).patch.body;
     if (typeof result !== 'string') throw new Error('Expected Markdown output');
     const paragraph = parse(result).children[0];
     if (paragraph?.type !== 'paragraph') throw new Error('Expected original paragraph');
     expect(paragraph.children.map((entry) => entry.type)).toEqual(['text']);
+  });
+  it('rejects provider autolinks that would change the parsed GFM structure', () => {
+    const prepared = prepare(prepareInput({ body: 'Hello' }));
+    expect(() =>
+      apply(
+        prepared,
+        Object.fromEntries(
+          prepared.segments.map((entry) => [entry.id, 'https://bad.example.com editor@example.com'])
+        )
+      )
+    ).toThrow();
   });
   it('rejects empty translations that would collapse inline formatting into block syntax', () => {
     const prepared = prepare(prepareInput({ body: '**Hello**' }));
