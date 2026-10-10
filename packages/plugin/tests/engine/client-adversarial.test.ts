@@ -160,7 +160,7 @@ describe('runtime adversarial transport', () => {
     [413, false, 'provider-failure'],
     [425, true, 'provider-failure'],
     [429, true, 'provider-failure'],
-    [503, true, 'provider-failure'],
+    [503, false, 'interrupted-request'],
   ])('classifies HTTP %i and never retries internally', async (status, retryable, code) => {
     const fetcher = recordingFetch(() =>
       json({ error: 'provider', message: config.apiKey }, status)
@@ -189,13 +189,14 @@ describe('runtime adversarial transport', () => {
       retryAfterMs: undefined,
     });
   });
-  it('sanitizes transport errors and keeps them retryable', async () => {
+  it('sanitizes paid transport errors and requires manual review', async () => {
     const fetcher = recordingFetch(() => {
       throw new Error(`Network failed: ${config.apiKey}`);
     });
     await expect(createGtClient(config).translate(request)).rejects.toMatchObject({
-      retryable: true,
-      diagnostic: { code: 'network-failure' },
+      retryable: false,
+      acceptance: 'unknown',
+      diagnostic: { code: 'interrupted-request' },
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
@@ -210,7 +211,8 @@ describe('runtime adversarial transport', () => {
         })
     );
     const failed = expect(createGtClient(config).translate(request)).rejects.toMatchObject({
-      retryable: true,
+      retryable: false,
+      acceptance: 'unknown',
     });
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 1);
     await failed;

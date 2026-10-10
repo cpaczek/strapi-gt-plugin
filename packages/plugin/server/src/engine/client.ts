@@ -47,18 +47,15 @@ const projectSchema = z.object({
   defaultLocale: z.string().min(1),
   currentLocales: z.array(z.string()),
 });
-const runtimeSchema = z.record(
-  z.string(),
-  z.discriminatedUnion('success', [
-    z.object({
-      success: z.literal(true),
-      translation: z.string(),
-      dataFormat: z.literal('STRING'),
-      locale: z.string(),
-    }),
-    z.object({ success: z.literal(false), code: z.number(), error: z.string() }),
-  ])
-);
+const runtimeItemSchema = z.discriminatedUnion('success', [
+  z.object({
+    success: z.literal(true),
+    translation: z.string(),
+    dataFormat: z.literal('STRING'),
+    locale: z.string(),
+  }),
+  z.object({ success: z.literal(false), code: z.number(), error: z.string() }),
+]);
 const uploadSchema = z.object({
   uploadedFiles: z.array(
     referenceSchema.extend({ fileName: z.string(), fileFormat: z.literal('JSON') })
@@ -100,7 +97,14 @@ const sameReference = (actual: GtFileReference, expected: GtFileReference): bool
   actual.fileId === expected.fileId &&
   actual.versionId === expected.versionId &&
   actual.branchId === expected.branchId;
-const httpFailure = (status: number, retryAfter?: string | null): GtRequestError => {
+const interruptedRequest = (httpStatus?: number): GtRequestError =>
+  new GtRequestError(messages.interruptedRequest(), false, undefined, {
+    acceptance: 'unknown',
+    httpStatus,
+  });
+
+const httpFailure = (status: number, retryAfter?: string | null, paid = false): GtRequestError => {
+  if (paid && (status === 408 || status >= 500)) return interruptedRequest(status);
   const seconds =
     retryAfter && /^\d+(?:\.\d+)?$/.test(retryAfter)
       ? Number(retryAfter) * MILLISECONDS_PER_SECOND
@@ -121,7 +125,8 @@ const httpFailure = (status: number, retryAfter?: string | null): GtRequestError
   return new GtRequestError(
     diagnostic,
     status === 408 || status === 425 || status === 429 || status >= 500,
-    retryAfterMs
+    retryAfterMs,
+    { acceptance: 'rejected', httpStatus: status }
   );
 };
 
@@ -235,20 +240,31 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
   });
   const invoke = async <T>(
     operation: () => Promise<{ data?: unknown; error?: unknown; response: Response }>,
-    schema: z.ZodType<T>
+    schema: z.ZodType<T>,
+    paid = false
   ): Promise<T> => {
     try {
       const result = await operation();
       if (result.error instanceof ApiError) throw result.error;
       if (!result.response.ok)
-        throw httpFailure(result.response.status, result.response.headers.get('retry-after'));
-      return parse(schema, result.data);
+        throw httpFailure(result.response.status, result.response.headers.get('retry-after'), paid);
+      const checked = schema.safeParse(result.data);
+      if (!checked.success) {
+        if (paid) throw interruptedRequest(result.response.status);
+        throw invalidTranslation(
+          'GT returned a response that does not match the public API contract'
+        );
+      }
+      return checked.data;
     } catch (failure) {
       if (failure instanceof GtRequestError) throw failure;
-      if (failure instanceof ApiError) throw httpFailure(failure.code);
+      if (failure instanceof ApiError) throw httpFailure(failure.code, undefined, paid);
+      if (paid) throw interruptedRequest();
       throw new GtRequestError(
         messages.networkFailure('The request timed out or the server connection was interrupted'),
-        true
+        true,
+        undefined,
+        { acceptance: 'unknown' }
       );
     }
   };
@@ -266,52 +282,121 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
       locales: project.currentLocales,
     };
   };
-  const translateSegments: GtClient['translate'] = async (request) => {
+  const translateSegments: GtClient['translate'] = async (request, progress) => {
     validateRequest(request);
-    const result: Record<string, string> = {};
-    const parts = runtimeParts(request);
-    let batch: TranslationSegment[] = [];
+    const requestHash = hashValue({
+      apiVersion: GT_API_VERSION,
+      projectId: config.projectId,
+      baseUrl: config.baseUrl,
+      sourceLocale: request.sourceLocale,
+      targetLocale: request.targetLocale,
+      segments: Object.fromEntries(
+        request.segments.map((entry) => [
+          entry.id,
+          {
+            text: entry.text,
+            context: entry.context ?? null,
+            kind: entry.kind,
+            path: [...entry.path],
+          },
+        ])
+      ),
+    });
+    const parts = runtimeParts(request).map((part) => ({
+      ...part,
+      checkpointId: hashValue([requestHash, part.originalId, part.segment.id]),
+    }));
+    const plan = new Map(parts.map((part) => [part.checkpointId, part]));
+    if (plan.size !== parts.length)
+      throw invalidTranslation('Runtime chunk identities must be unique');
+    const completed = new Map(
+      Object.entries(parse(z.record(z.string(), z.string()), progress?.completed ?? {}))
+    );
+    for (const [id, text] of completed) {
+      const part = plan.get(id);
+      if (!part || (!part.segment.text && text !== ''))
+        throw invalidTranslation('Saved runtime progress does not match this translation request');
+    }
+    let batch: typeof parts = [];
     const send = async (): Promise<void> => {
       if (!batch.length) return;
-      const body = runtimeBody(batch, request);
-      const response = await invoke(() => translate({ client, body }), runtimeSchema);
-      if (Object.keys(response).length !== batch.length)
-        throw invalidTranslation('GT returned an unexpected number of translated segments');
-      for (const segment of batch) {
-        const item = response[segment.id];
-        if (!Object.hasOwn(response, segment.id) || !item)
-          throw invalidTranslation('GT omitted a requested translated segment');
-        if (!item.success) throw httpFailure(item.code);
-        if (item.locale !== request.targetLocale)
-          throw invalidTranslation('GT returned text for a different locale');
-        Object.defineProperty(result, segment.id, {
-          value: item.translation,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
+      const body = runtimeBody(
+        batch.map((part) => part.segment),
+        request
+      );
+      const response = await invoke(
+        () => translate({ client, body }),
+        z.record(z.string(), z.unknown()),
+        true
+      );
+      const failures: GtRequestError[] = [];
+      if (
+        Object.keys(response).length !== batch.length ||
+        Object.keys(response).some((id) => !batch.some((part) => part.segment.id === id))
+      )
+        failures.push(interruptedRequest());
+      let saved = false;
+      for (const part of batch) {
+        const checked = runtimeItemSchema.safeParse(
+          Object.hasOwn(response, part.segment.id) ? response[part.segment.id] : undefined
+        );
+        if (!checked.success) {
+          failures.push(interruptedRequest());
+          continue;
+        }
+        const item = checked.data;
+        if (!item.success) {
+          failures.push(httpFailure(item.code));
+          continue;
+        }
+        if (item.locale !== request.targetLocale) {
+          failures.push(interruptedRequest());
+          continue;
+        }
+        completed.set(part.checkpointId, item.translation);
+        saved = true;
       }
+      if (saved && progress) {
+        try {
+          await progress.onProgress(Object.fromEntries(completed));
+        } catch {
+          throw interruptedRequest();
+        }
+      }
+      const failure =
+        failures.find((entry) => entry.acceptance === 'unknown') ??
+        failures.find((entry) => !entry.retryable) ??
+        failures[0];
+      if (failure) throw failure;
       batch = [];
     };
-    for (const { segment } of parts) {
-      if (!segment.text) {
-        Object.defineProperty(result, segment.id, { value: '', enumerable: true });
+    for (const part of parts) {
+      if (completed.has(part.checkpointId)) continue;
+      if (!part.segment.text) {
+        completed.set(part.checkpointId, '');
         continue;
       }
-      const candidate = [...batch, segment];
+      const candidate = [...batch, part];
       if (
         batch.length &&
         (candidate.length > RUNTIME_BATCH_ENTRIES ||
-          Buffer.byteLength(JSON.stringify(runtimeBody(candidate, request)), 'utf8') >
-            RUNTIME_BATCH_BYTES)
+          Buffer.byteLength(
+            JSON.stringify(
+              runtimeBody(
+                candidate.map((entry) => entry.segment),
+                request
+              )
+            ),
+            'utf8'
+          ) > RUNTIME_BATCH_BYTES)
       )
         await send();
-      batch.push(segment);
+      batch.push(part);
     }
     await send();
     const merged = new Map<string, string>();
     for (const part of parts) {
-      const translated = result[part.segment.id];
+      const translated = completed.get(part.checkpointId);
       if (translated === undefined)
         throw invalidTranslation('A runtime translation chunk is missing');
       merged.set(
@@ -373,16 +458,18 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
         targetLocales: [request.targetLocale],
         force,
       };
-      const response = await invoke(() => enqueueFileTranslations({ client, body }), enqueueSchema);
+      const response = await invoke(
+        () => enqueueFileTranslations({ client, body }),
+        enqueueSchema,
+        true
+      );
       for (const job of Object.values(response.jobData)) {
         if (
           !sameReference(job, reference) ||
           job.targetLocale !== request.targetLocale ||
           job.projectId !== config.projectId
         )
-          throw invalidTranslation(
-            'GT returned a job for a different file version, project or locale'
-          );
+          throw interruptedRequest();
       }
       return Object.keys(response.jobData);
     },
