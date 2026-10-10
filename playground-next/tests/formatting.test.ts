@@ -93,3 +93,22 @@ describe('formatting boundary cases', () => {
     expect(() => formatEnderLedger({ ...input, currency: 'not-a-code' })).toThrow();
   });
 });
+
+describe('number styles and digit systems', () => {
+  it('formats a ratio as a percentage', () => {
+    expect(formatEnderLedger({ ...input, amount: 0.5, numberStyle: 'percent' }).number).toBe('50%');
+  });
+  it('formats an explicit distance unit without converting it', () => {
+    expect(formatEnderLedger({ ...input, amount: 3, numberStyle: 'unit' }).number).toBe('3 meters');
+  });
+  it('uses compact number notation', () => {
+    expect(formatEnderLedger({ ...input, amount: 12500, numberStyle: 'compact' }).number).toContain(
+      'K'
+    );
+  });
+  it('renders Arabic digits when explicitly selected', () => {
+    const result = formatEnderLedger({ ...input, numberingSystem: 'arab' });
+    expect(result.number).toContain('١');
+    expect(result.currency).toContain('١');
+  });
+});
