@@ -17,8 +17,13 @@ test('article navigation retains identity across language changes', async ({ pag
   await page.goto('/en');
   await page.getByRole('link', { name: 'Read the story' }).first().click();
   await expect(
-    page.getByRole('heading', { name: 'The custody hearing of Dirt Block 47', exact: true })
+    page.getByRole('heading', {
+      name: 'The custody hearing of Dirt Block 47',
+      exact: true,
+      level: 1,
+    })
   ).toBeVisible();
+  await expect(page).toHaveURL(/\/en\/articles\/[^/]+$/);
   const documentId = new URL(page.url()).pathname.split('/').at(-1);
   await page.getByRole('link', { name: 'Français', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/fr/articles/${documentId}$`));
@@ -35,12 +40,14 @@ test('mobile edition has no horizontal overflow and supports keyboard navigation
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/en');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Tall tales.*Petty theft/s);
   await page.keyboard.press('Tab');
   await expect(page.getByRole('link', { name: 'Skip to stories' })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true
   );
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole('heading', { level: 1 }).click();
   await page.screenshot({ path: '../../../.work/screenshots/reader-mobile.png', fullPage: true });
 });
 

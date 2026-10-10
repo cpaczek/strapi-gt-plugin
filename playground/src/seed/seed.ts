@@ -42,13 +42,14 @@ export const seedEditorialContent = async (strapi: Core.Strapi): Promise<void> =
     },
   });
   for (const article of articles) {
+    const fields = structuredClone(article.fields);
     const created = await strapi.documents('api::article.article').create({
       locale: 'en',
       data: {
-        ...article.fields,
+        ...fields,
         category: categoryRecord.documentId,
         cover: numericId(file),
-        sections: article.fields.sections.map((section) =>
+        sections: fields.sections.map((section) =>
           section.__component === 'editorial.gallery'
             ? { ...section, images: [numericId(file)] }
             : section
