@@ -61,7 +61,7 @@ const metadata = (
 afterEach(cleanup);
 
 describe('review recovery and composed labels', () => {
-  it('opens saved source review instead of offering an invalid conflict retry', () => {
+  it('explains how to start a new request instead of offering an invalid conflict retry', () => {
     const retry = vi.fn();
     renderAdmin(
       <JobTable
@@ -71,23 +71,24 @@ describe('review recovery and composed labels', () => {
       />
     );
     expect(screen.queryByRole('button', { name: 'Retry job 1' })).toBeNull();
-    const review = screen.getByRole('link', { name: 'Review and translate again' });
-    const destination = new URL(review.getAttribute('href') ?? '', 'http://localhost');
-    expect(decodeURIComponent(destination.pathname)).toBe(
-      '/admin/content-manager/collection-types/api::article.article/article-one'
-    );
-    expect(destination.searchParams.get('plugins[i18n][locale]')).toBe('en');
+    expect(
+      screen.getByText(/Review this document in Content Manager and start a new translation/)
+    ).toBeTruthy();
     expect(retry).not.toHaveBeenCalled();
   });
   it('does not offer translation recovery without translation rights', () => {
     renderAdmin(<JobTable jobs={[{ ...failedJob, status: 'conflict' }]} busy={false} />);
-    expect(screen.queryByRole('link', { name: 'Review and translate again' })).toBeNull();
+    expect(
+      screen.queryByText(/Review this document in Content Manager and start a new translation/)
+    ).toBeNull();
     expect(screen.queryByRole('button', { name: /Retry/ })).toBeNull();
   });
   it('retains failed-job retry as a separate recovery path', () => {
     renderAdmin(<JobTable jobs={[failedJob]} busy={false} onRetry={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Retry job 1' })).toBeTruthy();
-    expect(screen.queryByRole('link', { name: 'Review and translate again' })).toBeNull();
+    expect(
+      screen.queryByText(/Review this document in Content Manager and start a new translation/)
+    ).toBeNull();
   });
   it.each(['Valeur localisée (texte alternatif) : cover', 'Valeur localisée (légende) : cover'])(
     'renders the French metadata label %s',
