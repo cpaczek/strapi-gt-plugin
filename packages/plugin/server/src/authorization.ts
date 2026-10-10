@@ -1,4 +1,8 @@
-import type { Core } from '@strapi/strapi';
+import type { PersistenceHost } from './persistence';
+interface AuthorizationHost extends PersistenceHost {
+  service(uid: 'admin::permission'): unknown;
+  plugin(name: string): { service(name: string): unknown };
+}
 import type { JsonObject } from '../../shared/contracts';
 import { PERMISSIONS } from '../../shared/constants';
 import { messages } from '../../shared/messages';
@@ -54,7 +58,7 @@ export interface ActorPermissions {
 }
 
 export const loadActorPermissions = async (
-  strapi: Core.Strapi,
+  strapi: AuthorizationHost,
   actorId: number | null
 ): Promise<ActorPermissions> => {
   if (!actorId) return denied();
