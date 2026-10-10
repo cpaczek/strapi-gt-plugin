@@ -32,7 +32,7 @@ import {
   appliedMedia,
 } from './media-service';
 import { createRepository, documentKey, summarizeJob } from './repository';
-import { publicSettings, validateSettings } from './settings';
+import { publicSettings, validateSettings, fieldAtPath } from './settings';
 import { schemas, permissionField } from './strapi-schema';
 import {
   DiagnosticError,
@@ -438,7 +438,6 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
       const latest =
         filters.latestPerLocale && filters.contentType && filters.documentId
           ? await repository.latest(
-              actorId,
               filters.contentType,
               filters.documentId,
               (await savedSettings()).targetLocales
@@ -448,8 +447,11 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
         ? { jobs: latest, total: latest.length }
         : await repository.list(actorId, filters);
       const visible: StoredJob[] = [];
+      const current = schemas(strapi);
+      const components = current.components;
       for (const job of result.jobs) {
-        const { schema, components } = schemaFor(job.contentType, job.settings);
+        const schema = current.contentTypes.find((item) => item.uid === job.contentType);
+        if (!schema?.localized) continue;
         const source = await documents.read(
           schema,
           components,
@@ -457,10 +459,30 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
           job.sourceLocale,
           job.sourceStatus
         );
-        if (source && checkContent(actor.checker(job.contentType))('read', source))
+        if (!source) continue;
+        const can = checkContent(actor.checker(job.contentType));
+        if (!can('read', source) || (job.actorId !== actorId && !job.prepared)) continue;
+        const fields = new Set(
+          job.prepared?.segments.map((segment) =>
+            permissionField(schema, components, source, segment.path)
+          ) ?? []
+        );
+        for (const [path, rule] of Object.entries(job.prepared?.input.rules ?? {})) {
+          if (rule.translate && fieldAtPath(schema, components, path)?.type === 'uid')
+            fields.add(permissionField(schema, components, source, path.split('.')));
+        }
+        if (
+          [...fields].every((field) => {
+            const attribute = fieldAtPath(schema, components, field);
+            return Boolean(attribute && !attribute.private && can('read', source, field));
+          })
+        )
           visible.push(job);
       }
-      return { jobs: visible.map(summarizeJob), total: result.total };
+      return {
+        jobs: visible.map(summarizeJob),
+        total: filters.latestPerLocale ? visible.length : result.total,
+      };
     },
     async retry(id: number, actorId: number) {
       const job = await repository.get(id);

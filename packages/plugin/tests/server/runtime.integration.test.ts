@@ -1,13 +1,16 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startStrapiFixture } from './strapi-fixture';
+import { REQUEST_TIMEOUT_MS } from '../../shared/constants';
+
+vi.setConfig({ testTimeout: REQUEST_TIMEOUT_MS * 2, hookTimeout: REQUEST_TIMEOUT_MS * 4 });
 
 let fixture: Awaited<ReturnType<typeof startStrapiFixture>> | undefined;
 beforeAll(async () => {
   fixture = await startStrapiFixture();
-}, 60_000);
+}, REQUEST_TIMEOUT_MS * 4);
 afterAll(async () => {
   if (fixture) await fixture.close();
-}, 60_000);
+}, REQUEST_TIMEOUT_MS * 4);
 const app = () => {
   if (!fixture) throw new Error('Strapi fixture did not boot');
   return fixture;
@@ -1065,63 +1068,75 @@ it('rejects too many document-locale jobs before creating any queue records', as
     ).total
   ).toBe(0);
 });
-it('rejects oversized prepared batches without partially queueing them', async () => {
-  const source = await freshSource();
-  const available = await app().runtime.metadata();
-  const targets = available.supportedLocales
-    .filter((code) => !['en', 'fr', 'ar'].includes(code))
-    .slice(0, 20);
-  for (const code of targets)
+it(
+  'rejects oversized prepared batches without partially queueing them',
+  async () => {
+    const source = await freshSource();
+    const available = await app().runtime.metadata();
+    const targets = available.supportedLocales
+      .filter((code) => !['en', 'fr', 'ar'].includes(code))
+      .slice(0, 20);
+    for (const code of targets)
+      await app()
+        .strapi.db.query('plugin::i18n.locale')
+        .create({ data: { code, name: code } });
+    await app().runtime.saveSettings({ ...app().settings, targetLocales: targets });
     await app()
-      .strapi.db.query('plugin::i18n.locale')
-      .create({ data: { code, name: code } });
-  await app().runtime.saveSettings({ ...app().settings, targetLocales: targets });
-  await app()
-    .strapi.documents('api::article.article')
-    .update({
-      documentId: source.documentId,
-      locale: 'en',
-      data: { summary: 'x'.repeat(Math.ceil(MAX_ENQUEUE_BYTES / targets.length / 2) + 1000) },
+      .strapi.documents('api::article.article')
+      .update({
+        documentId: source.documentId,
+        locale: 'en',
+        data: { summary: 'x'.repeat(Math.ceil(MAX_ENQUEUE_BYTES / targets.length / 2) + 1000) },
+      });
+    await expect(
+      app().runtime.enqueue(
+        {
+          contentType: 'api::article.article',
+          documentIds: [source.documentId],
+          targetLocales: targets,
+          force: false,
+        },
+        app().actorId,
+        'translate'
+      )
+    ).rejects.toMatchObject({
+      diagnostic: { code: 'validation', details: { reason: expect.stringContaining('smaller') } },
     });
-  await expect(
-    app().runtime.enqueue(
+    expect(
+      (
+        await app().runtime.repository.list(app().actorId, {
+          page: 1,
+          documentId: source.documentId,
+        })
+      ).total
+    ).toBe(0);
+  },
+  REQUEST_TIMEOUT_MS * 3
+);
+
+it(
+  'accepts the exact document-locale job limit as one atomic batch',
+  async () => {
+    const documents: string[] = [];
+    for (let index = 0; index < MAX_JOBS_PER_REQUEST / 2; index += 1)
+      documents.push((await freshSource()).documentId);
+    const before = app().mock.requests.length;
+    const response = await app().runtime.enqueue(
       {
         contentType: 'api::article.article',
-        documentIds: [source.documentId],
-        targetLocales: targets,
+        documentIds: documents,
+        targetLocales: ['fr', 'ar'],
         force: false,
       },
       app().actorId,
-      'translate'
-    )
-  ).rejects.toMatchObject({
-    diagnostic: { code: 'validation', details: { reason: expect.stringContaining('smaller') } },
-  });
-  expect(
-    (await app().runtime.repository.list(app().actorId, { page: 1, documentId: source.documentId }))
-      .total
-  ).toBe(0);
-}, 30_000);
-
-it('accepts the exact document-locale job limit as one atomic batch', async () => {
-  const documents: string[] = [];
-  for (let index = 0; index < MAX_JOBS_PER_REQUEST / 2; index += 1)
-    documents.push((await freshSource()).documentId);
-  const before = app().mock.requests.length;
-  const response = await app().runtime.enqueue(
-    {
-      contentType: 'api::article.article',
-      documentIds: documents,
-      targetLocales: ['fr', 'ar'],
-      force: false,
-    },
-    app().actorId,
-    'bulkTranslate'
-  );
-  expect(response.jobs).toHaveLength(MAX_JOBS_PER_REQUEST);
-  expect(new Set(response.jobs.map((job) => job.id)).size).toBe(MAX_JOBS_PER_REQUEST);
-  expect(app().mock.requests).toHaveLength(before);
-}, 30_000);
+      'bulkTranslate'
+    );
+    expect(response.jobs).toHaveLength(MAX_JOBS_PER_REQUEST);
+    expect(new Set(response.jobs.map((job) => job.id)).size).toBe(MAX_JOBS_PER_REQUEST);
+    expect(app().mock.requests).toHaveLength(before);
+  },
+  REQUEST_TIMEOUT_MS * 3
+);
 
 it('shows another editor latest locale result without exposing snapshots or values', async () => {
   const source = await freshSource();
@@ -1187,4 +1202,35 @@ it('hides another editor locale result outside the reader source-locale grant', 
       latestPerLocale: true,
     })
   ).toEqual({ jobs: [], total: 0 });
+});
+
+import { jobFixture } from './persistence-fixture';
+it('hides another editor job until its source field scope is known', async () => {
+  const source = await freshSource();
+  await app().runtime.repository.create(
+    jobFixture({
+      documentId: source.documentId,
+      actorId: app().actorId,
+      status: 'failed',
+      prepared: null,
+    })
+  );
+  const reader = await limitedActor({ read: ['title', 'summary', 'image'] });
+  expect(
+    await app().runtime.history(reader, {
+      page: 1,
+      contentType: 'api::article.article',
+      documentId: source.documentId,
+      latestPerLocale: true,
+    })
+  ).toEqual({ jobs: [], total: 0 });
+  expect(
+    (
+      await app().runtime.history(app().actorId, {
+        page: 1,
+        contentType: 'api::article.article',
+        documentId: source.documentId,
+      })
+    ).jobs
+  ).toHaveLength(1);
 });

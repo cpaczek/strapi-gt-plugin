@@ -81,7 +81,7 @@ export const loadActorPermissions = async (
   const ability = await permissionService.engine.generateUserAbility(user);
   if (!isAbility(ability)) return denied();
   return {
-    plugin: (action) => ability.can(PERMISSIONS[action]),
+    plugin: (action) => ability.can(PERMISSIONS[action]) === true,
     checker: (model) => {
       const checker = checkerService.create({ userAbility: ability, model });
       if (!isChecker(checker)) return denied();
@@ -92,4 +92,4 @@ export const loadActorPermissions = async (
 export const checkContent =
   (checker: Checker) =>
   (action: ContentAction, entity: JsonObject, field?: string): boolean =>
-    checker.can(`plugin::content-manager.explorer.${action}`, entity, field);
+    checker.can(`plugin::content-manager.explorer.${action}`, entity, field) === true;

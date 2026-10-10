@@ -214,7 +214,7 @@ it('returns each locale latest job even beyond the history page size', async () 
   const arabic = await repository.create(jobFixture({ targetLocale: 'ar', status: 'succeeded' }));
   for (let index = 0; index < 30; index += 1)
     await repository.create(jobFixture({ targetLocale: 'fr', status: 'succeeded' }));
-  const response = await repository.latest(7, 'api::article.article', 'document', ['fr', 'ar']);
+  const response = await repository.latest('api::article.article', 'document', ['fr', 'ar']);
   expect(response).toHaveLength(2);
   expect(response.find((job) => job.targetLocale === 'ar')?.id).toBe(arabic.id);
   expect(response.find((job) => job.targetLocale === 'fr')?.id).toBe(arabic.id + 30);

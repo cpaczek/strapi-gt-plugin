@@ -162,7 +162,6 @@ export const createRepository = (strapi: PersistenceHost) => {
       return { jobs: z.array(z.unknown()).parse(rows).map(decode), total: z.number().parse(total) };
     },
     async latest(
-      actorId: number,
       contentType: string,
       documentId: string,
       targetLocales: string[]
@@ -170,7 +169,7 @@ export const createRepository = (strapi: PersistenceHost) => {
       const records = await Promise.all(
         targetLocales.map(async (targetLocale) => {
           const row: unknown = await strapi.db.query(jobUid).findOne({
-            where: { actorId, contentType, entryDocumentId: documentId, targetLocale },
+            where: { contentType, entryDocumentId: documentId, targetLocale },
             orderBy: { id: 'desc' },
           });
           return row ? decode(row) : null;
@@ -258,27 +257,23 @@ export const createRepository = (strapi: PersistenceHost) => {
       return countSchema.parse(locks).count === 2;
     },
     async saveProgress(job: StoredJob, completed: Record<string, string>): Promise<boolean> {
-      const current: unknown = await strapi.db
-        .query(jobUid)
-        .findOne({
-          where: {
-            id: job.id,
-            leaseOwner: job.leaseOwner,
-            leaseUntil: { $gt: new Date().toISOString() },
-          },
-        });
+      const current: unknown = await strapi.db.query(jobUid).findOne({
+        where: {
+          id: job.id,
+          leaseOwner: job.leaseOwner,
+          leaseUntil: { $gt: new Date().toISOString() },
+        },
+      });
       if (!current || !job.leaseOwner) return false;
       const saved = decode(current);
-      const updated: unknown = await strapi.db
-        .query(jobUid)
-        .updateMany({
-          where: {
-            id: job.id,
-            leaseOwner: job.leaseOwner,
-            leaseUntil: { $gt: new Date().toISOString() },
-          },
-          data: { payload: { ...saved, runtimeProgress: { ...completed } } },
-        });
+      const updated: unknown = await strapi.db.query(jobUid).updateMany({
+        where: {
+          id: job.id,
+          leaseOwner: job.leaseOwner,
+          leaseUntil: { $gt: new Date().toISOString() },
+        },
+        data: { payload: { ...saved, runtimeProgress: { ...completed } } },
+      });
       return countSchema.parse(updated).count === 1;
     },
     async completeStage(job: StoredJob): Promise<boolean> {

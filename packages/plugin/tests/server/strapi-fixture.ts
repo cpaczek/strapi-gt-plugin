@@ -150,19 +150,32 @@ export const startStrapiFixture = async () => {
     .eventNames()
     .map((event) => ({ event, handlers: process.rawListeners(event) }));
   const close = async () => {
-    if (strapi) {
-      await strapi.destroy();
-      for (const { event, handlers } of listeners)
-        for (const handler of handlers)
-          if (!process.rawListeners(event).includes(handler)) process.on(event, handler);
+    const failures: unknown[] = [];
+    try {
+      if (strapi) await strapi.destroy();
+    } catch (failure) {
+      failures.push(failure);
     }
-    await mock.close();
+    for (const { event, handlers } of listeners)
+      for (const handler of handlers)
+        if (!process.rawListeners(event).includes(handler)) process.on(event, handler);
+    try {
+      await mock.close();
+    } catch (failure) {
+      failures.push(failure);
+    }
     Reflect.deleteProperty(globalThis, fixtureSymbol);
     if (previousKey === undefined) delete process.env.GT_API_KEY;
     else process.env.GT_API_KEY = previousKey;
     if (previousTelemetry === undefined) delete process.env.STRAPI_TELEMETRY_DISABLED;
     else process.env.STRAPI_TELEMETRY_DISABLED = previousTelemetry;
-    await rm(directory, { recursive: true, force: true });
+    try {
+      await rm(directory, { recursive: true, force: true });
+    } catch (failure) {
+      failures.push(failure);
+    }
+    if (failures.length)
+      throw new AggregateError(failures, 'The Strapi fixture could not finish cleanup');
   };
   try {
     strapi = createStrapi({ appDir: directory, distDir: directory });
@@ -232,7 +245,14 @@ export const startStrapiFixture = async () => {
     await runtime.saveSettings(settings);
     return { strapi, runtime, actorId: actor.id, source, assetId: asset.id, settings, mock, close };
   } catch (failure) {
-    await close();
+    try {
+      await close();
+    } catch (cleanupFailure) {
+      throw new AggregateError(
+        [failure, cleanupFailure],
+        'Strapi initialization failed and cleanup reported an additional error'
+      );
+    }
     throw failure;
   }
 };
