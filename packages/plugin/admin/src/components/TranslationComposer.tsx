@@ -4,7 +4,7 @@ import { Flex, Typography } from '@strapi/design-system';
 import type { TranslationOptionsResponse, TranslationRequest } from '../../../shared/contracts';
 import { MAX_DOCUMENTS_PER_REQUEST } from '../../../shared/constants';
 import { messages } from '../../../shared/messages';
-import { useText } from '../i18n';
+import { localeLabel, useText } from '../i18n';
 import { Notice, Toggle } from './Controls';
 
 export interface TranslationComposerProps {
@@ -55,7 +55,7 @@ export const TranslationComposer = ({
           .map((locale) => (
             <Toggle
               key={locale.code}
-              label={`${locale.name} (${locale.code})`}
+              label={localeLabel(locale)}
               checked={allowedTargets.includes(locale.code)}
               disabled={busy}
               onChange={(checked) => {

@@ -12,3 +12,6 @@ export const useText = () => {
   return (key: MessageKey, values?: Record<string, string | number>) =>
     formatMessage(descriptor(key), values);
 };
+
+export const localeLabel = ({ name, code }: { name: string; code: string }): string =>
+  name.endsWith(` (${code})`) ? name : `${name} (${code})`;
