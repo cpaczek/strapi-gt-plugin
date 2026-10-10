@@ -78,6 +78,7 @@ test('editor translation stays a draft until publication and reaches the reader'
   await expect(
     reader.getByRole('img', { name: /^\[fr\] Original pixel drawing/ }).first()
   ).toBeVisible();
+  await reader.screenshot({ path: '../../../.work/screenshots/reader-published-fr.png' });
   await reader.getByRole('link', { name: 'English', exact: true }).click();
   await expect(reader).toHaveURL(new RegExp(`/en/articles/${documentId}$`));
   await expect(reader.getByRole('heading', { name: sourceTitle, exact: true })).toBeVisible();
