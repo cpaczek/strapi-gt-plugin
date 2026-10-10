@@ -19,8 +19,9 @@ const host = vi.hoisted(() => ({
   permissions: vi.fn(),
   layout: vi.fn(),
 }));
-vi.mock('@strapi/strapi/admin', () => ({ useFetchClient: () => host, useRBAC: host.permissions }));
-vi.mock('@strapi/content-manager/strapi-admin', () => ({
+vi.mock('@strapi/strapi/admin', () => ({
+  useFetchClient: () => host,
+  useRBAC: host.permissions,
   unstable_useDocumentLayout: host.layout,
 }));
 const wrapper = ({ children }: { children: ReactNode }) => (
