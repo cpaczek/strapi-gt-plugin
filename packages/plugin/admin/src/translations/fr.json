@@ -172,5 +172,5 @@
   "diagnostic.conflict-recovery.happened": "Cette traduction nécessite une nouvelle demande",
   "diagnostic.conflict-recovery.fix": "Vérifiez ce document dans Content Manager et lancez une nouvelle traduction",
   "jobs.visibility": "Seules les tâches dont vous pouvez actuellement lire le contenu source sont affichées. Le total inclut les tâches masquées ; certaines pages peuvent donc être vides.",
-  "jobs.filteredEmpty": "Aucune tâche de cette page ne peut être affichée. Le contenu source a peut-être été supprimé ou vos droits d'accès ont changé."
+  "jobs.filteredEmpty": "Aucune tâche sur cette page ne peut être consultée. Leur contenu source a peut-être été supprimé ou vos droits d'accès ont peut-être changé."
 }
