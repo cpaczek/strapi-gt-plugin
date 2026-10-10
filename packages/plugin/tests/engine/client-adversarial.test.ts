@@ -350,15 +350,15 @@ describe('file lifecycle adversarial transport', () => {
       status: 'pending',
     });
   });
-  it.each([[{ ...readyFile, versionId: 'old' }], [readyFile, readyFile]])(
-    'rejects wrong or duplicate readiness references %#',
-    async (translatedFiles) => {
-      recordingFetch(() => json({ translatedFiles }));
-      await expect(createGtClient(config).poll(reference, 'fr', [])).rejects.toMatchObject({
-        retryable: false,
-      });
-    }
-  );
+  it.each([
+    { translatedFiles: [{ ...readyFile, versionId: 'old' }] },
+    { translatedFiles: [readyFile, readyFile] },
+  ])('rejects wrong or duplicate readiness references %#', async ({ translatedFiles }) => {
+    recordingFetch(() => json({ translatedFiles }));
+    await expect(createGtClient(config).poll(reference, 'fr', [])).rejects.toMatchObject({
+      retryable: false,
+    });
+  });
   it('downloads exactly the recorded version with no latest-version fallback', async () => {
     recordingFetch((_outgoing, body) => {
       expect(body).toEqual([{ ...reference, locale: 'fr', useLatestAvailableVersion: false }]);
@@ -391,6 +391,46 @@ describe('file lifecycle adversarial transport', () => {
     recordingFetch(() => json(downloaded(JSON.stringify({ title: 'x'.repeat(MAX_SOURCE_BYTES) }))));
     await expect(createGtClient(config).download(reference, 'fr')).rejects.toMatchObject({
       retryable: false,
+    });
+  });
+});
+
+describe('runtime size and status boundaries', () => {
+  it('rejects context that leaves no room for source text', async () => {
+    const fetcher = recordingFetch(() => json({}));
+    await expect(
+      createGtClient(config).translate({
+        ...request,
+        segments: [segment('title', 'Hello', 'x'.repeat(RUNTIME_BATCH_BYTES))],
+      })
+    ).rejects.toMatchObject({ retryable: false });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('rejects a single grapheme larger than the payload budget', async () => {
+    const fetcher = recordingFetch(() => json({}));
+    await expect(
+      createGtClient(config).translate({
+        ...request,
+        segments: [segment('title', `a${'\u0301'.repeat(RUNTIME_BATCH_BYTES)}`, 'Grapheme')],
+      })
+    ).rejects.toMatchObject({ retryable: false });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('returns an empty text locally without paying for a runtime call', async () => {
+    const fetcher = recordingFetch(() => json({}));
+    await expect(
+      createGtClient(config).translate({ ...request, segments: [segment('title', '')] })
+    ).resolves.toEqual({ title: '' });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('handles a public ApiError raised by the transport', async () => {
+    const { ApiError } = await import('@generaltranslation/api');
+    recordingFetch(() => {
+      throw new ApiError('auth', 401, 'Do not expose');
+    });
+    await expect(createGtClient(config).translate(request)).rejects.toMatchObject({
+      retryable: false,
+      diagnostic: { code: 'invalid-key' },
     });
   });
 });

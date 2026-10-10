@@ -163,6 +163,64 @@ const runtimeBody = (
   metadata: {},
 });
 
+interface RuntimePart {
+  originalId: string;
+  segment: TranslationSegment;
+  prefix: string;
+  suffix: string;
+}
+
+const runtimeParts = (request: GtTranslationRequest): RuntimePart[] =>
+  request.segments.flatMap((segment) => {
+    if (Buffer.byteLength(JSON.stringify(runtimeBody([segment], request))) <= RUNTIME_BATCH_BYTES) {
+      return [{ originalId: segment.id, segment, prefix: '', suffix: '' }];
+    }
+    const parts: RuntimePart[] = [];
+    const chunkId = (index: number): string => hashValue(['runtime-part', segment.id, index]);
+    const overhead = Buffer.byteLength(
+      JSON.stringify(runtimeBody([{ ...segment, id: chunkId(0), text: '' }], request))
+    );
+    const budget = RUNTIME_BATCH_BYTES - overhead;
+    if (budget <= 0)
+      throw invalidTranslation(
+        'The field context is too large for runtime translation; shorten the context'
+      );
+    const flush = (text: string): void => {
+      const prefix = text.slice(0, text.length - text.trimStart().length);
+      const remaining = text.slice(prefix.length);
+      const suffix = remaining.slice(remaining.trimEnd().length);
+      parts.push({
+        originalId: segment.id,
+        segment: {
+          ...segment,
+          id: chunkId(parts.length),
+          text: remaining.slice(0, remaining.length - suffix.length),
+        },
+        prefix,
+        suffix,
+      });
+    };
+    let chunk = '';
+    let bytes = 0;
+    const graphemes = new Intl.Segmenter(request.sourceLocale, { granularity: 'grapheme' }).segment(
+      segment.text
+    );
+    for (const { segment: grapheme } of graphemes) {
+      const length = Buffer.byteLength(JSON.stringify(grapheme)) - 2;
+      if (length > budget)
+        throw invalidTranslation('A text grapheme exceeds the runtime translation size limit');
+      if (bytes + length > budget) {
+        flush(chunk);
+        chunk = '';
+        bytes = 0;
+      }
+      chunk += grapheme;
+      bytes += length;
+    }
+    if (chunk) flush(chunk);
+    return parts;
+  });
+
 export const createGtClient = (config: ResolvedGtConfig): GtClient => {
   if (!config.apiKey) throw new GtRequestError(messages.missingKey());
   if (!config.projectId) throw invalidTranslation('Set the GT project ID before translating');
@@ -181,6 +239,7 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
   ): Promise<T> => {
     try {
       const result = await operation();
+      if (result.error instanceof ApiError) throw result.error;
       if (!result.response.ok)
         throw httpFailure(result.response.status, result.response.headers.get('retry-after'));
       return parse(schema, result.data);
@@ -210,6 +269,7 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
   const translateSegments: GtClient['translate'] = async (request) => {
     validateRequest(request);
     const result: Record<string, string> = {};
+    const parts = runtimeParts(request);
     let batch: TranslationSegment[] = [];
     const send = async (): Promise<void> => {
       if (!batch.length) return;
@@ -219,7 +279,8 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
         throw invalidTranslation('GT returned an unexpected number of translated segments');
       for (const segment of batch) {
         const item = response[segment.id];
-        if (!item) throw invalidTranslation('GT omitted a requested translated segment');
+        if (!Object.hasOwn(response, segment.id) || !item)
+          throw invalidTranslation('GT omitted a requested translated segment');
         if (!item.success) throw httpFailure(item.code);
         if (item.locale !== request.targetLocale)
           throw invalidTranslation('GT returned text for a different locale');
@@ -232,7 +293,11 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
       }
       batch = [];
     };
-    for (const segment of request.segments) {
+    for (const { segment } of parts) {
+      if (!segment.text) {
+        Object.defineProperty(result, segment.id, { value: '', enumerable: true });
+        continue;
+      }
       const candidate = [...batch, segment];
       if (
         batch.length &&
@@ -244,7 +309,17 @@ export const createGtClient = (config: ResolvedGtConfig): GtClient => {
       batch.push(segment);
     }
     await send();
-    return result;
+    const merged = new Map<string, string>();
+    for (const part of parts) {
+      const translated = result[part.segment.id];
+      if (translated === undefined)
+        throw invalidTranslation('A runtime translation chunk is missing');
+      merged.set(
+        part.originalId,
+        (merged.get(part.originalId) ?? '') + part.prefix + translated + part.suffix
+      );
+    }
+    return Object.fromEntries(merged);
   };
   return {
     testConnection,

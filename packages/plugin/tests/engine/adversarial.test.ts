@@ -350,3 +350,81 @@ describe('adversarial checkpoints and metadata', () => {
     expect(retryDelay(1, () => 0.5)).toBeGreaterThan(0);
   });
 });
+
+describe('component references and incomplete populated values', () => {
+  it('copies only reference identities for nested media and relations', () => {
+    const components = {
+      'content.card': {
+        uid: 'content.card',
+        localized: false,
+        draftAndPublish: false,
+        attributes: {
+          heading: { type: 'string' as const },
+          photo: { type: 'media' as const },
+          gallery: { type: 'media' as const },
+          related: { type: 'relation' as const },
+          links: { type: 'relation' as const },
+          secret: { type: 'string' as const, private: true },
+        },
+      },
+    };
+    const source = {
+      card: {
+        id: 3,
+        heading: 'Hello',
+        photo: { id: 8, url: '/source.png' },
+        gallery: [{ id: 9 }, 10, null, {}],
+        related: { documentId: 'doc' },
+        links: [{ id: 7 }, 'other', {}],
+        secret: 'Private',
+      },
+    };
+    const prepared = prepare(prepareInput(source, { components }));
+    expect(prepared.segments.map((entry) => entry.text)).toEqual(['Hello']);
+    expect(apply(prepared, identity(prepared.segments)).patch.card).toEqual({
+      heading: 'Hello',
+      photo: 8,
+      gallery: [9, 10, null, null],
+      related: 'doc',
+      links: [7, 'other', null],
+    });
+  });
+  it('retains unpopulated media identities while translating a sibling', () => {
+    const prepared = prepare(prepareInput({ card: { heading: 'Hello', photo: 4 } }));
+    expect(apply(prepared, identity(prepared.segments)).patch.card).toEqual({
+      heading: 'Hello',
+      photo: 4,
+    });
+  });
+  it('ignores unknown zone discriminators, invalid members and nontext Blocks leaves', () => {
+    const prepared = prepare(
+      prepareInput({
+        sections: [null, { __component: 'missing.card', heading: 'No' }, { heading: 'No' }],
+        blocks: [null, 5, { type: 'text', text: '' }, { type: 'unknown', children: null }],
+      })
+    );
+    expect(prepared.segments).toEqual([]);
+    expect(apply(prepared, {}).patch.blocks).toEqual([
+      null,
+      5,
+      { type: 'text', text: '' },
+      { type: 'unknown', children: null },
+    ]);
+  });
+  it('ignores media without identities and allows raw shared metadata with no overlay history', () => {
+    const photo = [{ id: 'asset', caption: 'Shared' }, { caption: 'No identity' }, 5, null];
+    const prepared = prepare(prepareInput({ photo }, { target: { photo }, mediaMetadata: true }));
+    expect(prepared.segments.map((entry) => entry.text)).toEqual(['Shared']);
+    expect(apply(prepared, identity(prepared.segments)).media[0]?.assetId).toBe('asset');
+    expect(mediaSourceHash({}, 'caption')).toMatch(/^[a-f0-9]+$/);
+  });
+  it('protects a nonempty localized media value with no overlay checkpoint', () => {
+    const prepared = prepare(
+      prepareInput(
+        { photo: { id: 1, caption: 'Source' } },
+        { target: { photo: { id: 1, caption: 'Human' } }, mediaMetadata: true }
+      )
+    );
+    expect(prepared.protectedPaths).toEqual(['["photo","caption"]']);
+  });
+});
