@@ -238,3 +238,33 @@ it('routes large context-free batches through persisted file stages', async () =
     ).stage
   ).toBe('upload');
 });
+
+it('saves confirmed runtime chunks before accepting the next provider batch', async () => {
+  const saved: Record<string, string>[] = [];
+  const partialClient: GtClient = {
+    ...client,
+    translate: async (_request, progress) => {
+      expect(progress?.completed).toEqual({ first: 'Known' });
+      await progress?.onProgress({ first: 'Known', second: 'Confirmed' });
+      throw new Error('Next request failed');
+    },
+  };
+  const running = {
+    ...job(),
+    stage: 'translate' as const,
+    prepared,
+    runtimeProgress: { first: 'Known' },
+  };
+  await expect(
+    transitionJob(running, {
+      client: partialClient,
+      prepare: async () => prepared,
+      apply: async () => undefined,
+      checkpoint: async (completed) => {
+        saved.push(completed);
+      },
+    })
+  ).rejects.toThrow('Next request failed');
+  expect(saved).toEqual([{ first: 'Known', second: 'Confirmed' }]);
+  expect(running.runtimeProgress).toEqual(saved[0]);
+});
