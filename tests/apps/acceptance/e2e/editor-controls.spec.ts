@@ -8,6 +8,7 @@ import {
   type APIRequestContext,
   type BrowserContext,
   type Page,
+  type Locator,
 } from '@playwright/test';
 import { z } from 'zod';
 import { messages } from '../../../../packages/plugin/shared/messages';
@@ -211,6 +212,52 @@ const waitForJobs = async (api: APIRequestContext, documentIds: string[], jobIds
     )
     .toBe(true);
 };
+const enabledContrast = (button: Locator): Promise<number> =>
+  button.evaluate(
+    (element) =>
+      new Promise<number>((resolve) => {
+        const luminance = (color: string) => {
+          const [red = 0, green = 0, blue = 0] = (color.match(/[\d.]+/g) ?? [])
+            .slice(0, 3)
+            .map((channel) => {
+              const value = Number(channel) / 255;
+              return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+            });
+          return red * 0.2126 + green * 0.7152 + blue * 0.0722;
+        };
+        let wasDisabled = false;
+        const observer = new MutationObserver((records) => {
+          if (
+            records.some((record) => record.oldValue === 'true') ||
+            element.getAttribute('aria-disabled') === 'true'
+          )
+            wasDisabled = true;
+          if (wasDisabled && element.getAttribute('aria-disabled') !== 'true') {
+            observer.disconnect();
+            let minimum = Infinity;
+            const sample = () => {
+              const foreground = luminance(getComputedStyle(element).color);
+              const background = luminance(getComputedStyle(element).backgroundColor);
+              minimum = Math.min(
+                minimum,
+                (Math.max(foreground, background) + 0.05) /
+                  (Math.min(foreground, background) + 0.05)
+              );
+              if (element.getAnimations().some((animation) => animation.playState === 'running'))
+                requestAnimationFrame(sample);
+              else resolve(minimum);
+            };
+            sample();
+          }
+        });
+        observer.observe(element, {
+          attributes: true,
+          attributeFilter: ['aria-disabled'],
+          attributeOldValue: true,
+        });
+      })
+  );
+
 const queueFrench = async (page: Page, force = false) => {
   await openTranslation(page);
   const modal = page.getByRole('dialog', { name: 'Translate content' });
@@ -233,13 +280,17 @@ const queueFrench = async (page: Page, force = false) => {
       new URL(response.url()).pathname === '/general-translation/translate' &&
       response.request().method() === 'POST'
   );
-  await modal
-    .getByRole('button', { name: force ? 'Force retranslate' : 'Translate', exact: true })
-    .click();
+  const submit = modal.getByRole('button', {
+    name: force ? 'Force retranslate' : 'Translate',
+    exact: true,
+  });
+  const contrast = enabledContrast(submit);
+  await submit.click();
   const response = await queued;
   expect(response.status()).toBe(200);
   await expect(modal.getByText(/Translation jobs were queued/)).toBeVisible();
   const jobs = enqueueSchema.parse(await response.json()).jobs;
+  expect(await contrast).toBeGreaterThanOrEqual(4.5);
   await assertAccessible(page, '[role="dialog"]');
   await modal.getByRole('button', { name: 'Close modal', exact: true }).click();
   await assertAccessible(page, 'section[aria-label="General Translation controls"]');
@@ -259,6 +310,20 @@ test('bulk translation queues only the selected saved documents', async ({ page,
   const first = await editor.createSource('Bulk first');
   const second = await editor.createSource('Bulk second');
   const unselected = await editor.createSource('Unselected control');
+  let releaseOptions = () => {};
+  const optionsGate = new Promise<void>((resolve) => {
+    releaseOptions = resolve;
+  });
+  await page.route(
+    '**/general-translation/translation-options',
+    async (route) => {
+      const response = await route.fetch();
+      await optionsGate;
+      await route.fulfill({ response });
+    },
+    { times: 1 }
+  );
+  const optionsLoaded = page.waitForResponse('**/general-translation/translation-options');
   await page.goto(`${adminOrigin}/admin${collection}?locale=en`);
   await expect(page.getByRole('grid')).toBeVisible();
   await dismissEditorTour(page);
@@ -268,6 +333,8 @@ test('bulk translation queues only the selected saved documents', async ({ page,
       .filter({ has: page.getByText(source.title, { exact: true }) });
     await row.getByRole('checkbox').check();
   }
+  releaseOptions();
+  expect((await optionsLoaded).status()).toBe(200);
   await expect(page.getByRole('button', { name: 'Translate selected', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Translate selected', exact: true }).click();
   const modal = page.getByRole('dialog', { name: 'Translate selected' });

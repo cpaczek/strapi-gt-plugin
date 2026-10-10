@@ -1,14 +1,18 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { IntlProvider } from 'react-intl';
 import { Notice } from '../../admin/src/components/Controls';
 import { JobTable } from '../../admin/src/components/JobTable';
 import { messages } from '../../shared/messages';
 import { renderAdmin } from './render';
-import { failedJob } from './fixtures';
+import { DocumentPanel } from '../../admin/src/components/DocumentPanel';
+import { failedJob, options } from './fixtures';
 import frenchDictionary from '../../admin/src/translations/fr.json';
 import { PLUGIN_ID } from '../../shared/constants';
+
+const host = vi.hoisted(() => ({ get: vi.fn() }));
+vi.mock('@strapi/strapi/admin', () => ({ useFetchClient: () => host }));
 
 const french = {
   ...Object.fromEntries(
@@ -45,6 +49,27 @@ describe('translated diagnostic surfaces', () => {
     );
     expect(
       screen.getByText(
+        'General Translation: Vous ne pouvez pas traduire ce contenu. Demandez les autorisations nécessaires.'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText(messages.permissionDenied().text)).toBeNull();
+  });
+  it('shows the latest per-locale diagnostic in the selected admin language', async () => {
+    host.get.mockResolvedValue({
+      data: { jobs: [{ ...failedJob, error: messages.permissionDenied() }], total: 1 },
+    });
+    renderAdmin(
+      <IntlProvider locale="fr" messages={french}>
+        <DocumentPanel
+          model="api::article.article"
+          documentId="one"
+          options={options}
+          published={false}
+        />
+      </IntlProvider>
+    );
+    expect(
+      await screen.findByText(
         'General Translation: Vous ne pouvez pas traduire ce contenu. Demandez les autorisations nécessaires.'
       )
     ).toBeTruthy();
