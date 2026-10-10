@@ -8,7 +8,7 @@
     "test": "pnpm test:tooling && turbo run test",
     "test:tooling": "vitest run --config vitest.tooling.config.ts",
     "typecheck": "turbo run typecheck",
-    "lint": "node scripts/check-defaults.mjs && node scripts/check-prose.mjs && oxlint scripts && turbo run lint",
+    "lint": "node scripts/check-catalog-pins.mjs && node scripts/check-defaults.mjs && node scripts/check-prose.mjs && oxlint scripts && turbo run lint",
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --check .",
     "format:fix": "oxfmt --write .",
@@ -35,7 +35,8 @@
     "turbo": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "yaml": "2.9.1"
   },
   "engines": {
     "node": ">=22.12.0 <=26.x.x"

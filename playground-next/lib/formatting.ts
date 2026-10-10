@@ -8,18 +8,29 @@ export interface LedgerInput {
   mood: string;
   cutoff: number;
   timeZone?: string;
+  numberStyle?: string;
+  numberingSystem?: string;
 }
 export const ledgerBaseDate = '2026-10-10T12:00:00.000Z';
 export const formatEnderLedger = (input: LedgerInput) => {
   const gt = new GTRuntime({ sourceLocale: 'en', targetLocale: input.locale });
+  const numberingSystem = input.numberingSystem ?? 'latn';
+  const numberOptions: Intl.NumberFormatOptions =
+    input.numberStyle === 'percent'
+      ? { style: 'percent' }
+      : input.numberStyle === 'unit'
+        ? { style: 'unit', unit: 'meter', unitDisplay: 'long' }
+        : input.numberStyle === 'compact'
+          ? { notation: 'compact' }
+          : { style: 'decimal' };
   const inventory = [
     { id: 'dirt', label: 'dirt' },
     { id: 'sand', label: 'sand' },
     { id: 'dignity', label: 'questionable dignity' },
   ];
   return {
-    currency: gt.formatCurrency(input.amount, input.currency),
-    number: gt.formatNum(input.amount),
+    currency: gt.formatCurrency(input.amount, input.currency, { numberingSystem }),
+    number: gt.formatNum(input.amount, { ...numberOptions, numberingSystem }),
     date: gt.formatDateTime(new Date(ledgerBaseDate), {
       dateStyle: 'long',
       timeStyle: 'short',

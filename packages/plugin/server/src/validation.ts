@@ -159,6 +159,7 @@ export interface StoredJob extends TranslationJob {
   settings: PluginSettings;
   sourceStatus: 'draft' | 'published';
   permission: 'translate' | 'bulkTranslate';
+  runtimeProgress?: Record<string, string>;
 }
 export const jobSchema: z.ZodType<StoredJob> = z.object({
   id: z.number().int().positive(),
@@ -185,6 +186,7 @@ export const jobSchema: z.ZodType<StoredJob> = z.object({
   settings: settingsSchema,
   sourceStatus: z.enum(['draft', 'published']),
   permission: z.enum(['translate', 'bulkTranslate']),
+  runtimeProgress: z.record(z.string(), z.string()).default({}),
 });
 export const parseBody = <T>(schema: z.ZodType<T>, value: unknown): T => {
   const result = schema.safeParse(value);

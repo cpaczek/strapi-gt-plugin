@@ -5,7 +5,8 @@ import { DiagnosticError, fail, type StoredJob } from './validation';
 export interface JobOperations {
   client: GtClient;
   prepare(job: StoredJob): Promise<PreparedTranslation>;
-  apply(job: StoredJob): Promise<void>;
+  apply(job: StoredJob, prepared: PreparedTranslation): Promise<void>;
+  checkpoint?(completed: Record<string, string>): Promise<void>;
 }
 export const shouldUseFiles = (prepared: PreparedTranslation): boolean =>
   prepared.segments.every((segment) => !segment.context) &&
@@ -35,8 +36,16 @@ export const transitionJob = async (
     segments: job.prepared.segments,
   };
   switch (job.stage) {
-    case 'translate':
-      return { ...job, translations: await operations.client.translate(request), stage: 'apply' };
+    case 'translate': {
+      const translations = await operations.client.translate(request, {
+        completed: job.runtimeProgress ?? {},
+        onProgress: async (completed) => {
+          if (operations.checkpoint) await operations.checkpoint(completed);
+          job.runtimeProgress = { ...completed };
+        },
+      });
+      return { ...job, translations, stage: 'apply' };
+    }
     case 'upload':
       return {
         ...job,
@@ -72,7 +81,7 @@ export const transitionJob = async (
       };
     }
     case 'apply':
-      await operations.apply(job);
+      await operations.apply(job, job.prepared);
       return { ...job, status: 'succeeded', error: null };
   }
 };

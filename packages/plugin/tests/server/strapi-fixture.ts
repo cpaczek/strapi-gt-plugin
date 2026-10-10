@@ -100,7 +100,49 @@ export const startStrapiFixture = async () => {
     'config/database.js',
     `module.exports = ${JSON.stringify({ connection: { client: 'sqlite', connection: { filename: resolve(directory, 'test.db') }, useNullAsDefault: true } })};`
   );
+  Object.assign(schema.attributes, {
+    card: {
+      type: 'component',
+      component: 'editorial.card',
+      repeatable: false,
+      pluginOptions: { i18n: { localized: true } },
+    },
+    cards: {
+      type: 'component',
+      component: 'editorial.card',
+      repeatable: true,
+      pluginOptions: { i18n: { localized: true } },
+    },
+    sections: {
+      type: 'dynamiczone',
+      components: ['editorial.card'],
+      pluginOptions: { i18n: { localized: true } },
+    },
+  });
+  await write(
+    'src/components/editorial/card.json',
+    {
+      collectionName: 'server_cards',
+      info: { displayName: 'Server card' },
+      attributes: {
+        title: { type: 'string' },
+        count: { type: 'integer' },
+        image: { type: 'media', multiple: false },
+      },
+    },
+    true
+  );
   await write('src/api/article/content-types/article/schema.json', schema, true);
+  await write(
+    'src/api/note/content-types/note/schema.json',
+    {
+      ...schema,
+      collectionName: 'server_notes',
+      info: { singularName: 'note', pluralName: 'notes', displayName: 'Server note' },
+      options: { draftAndPublish: false },
+    },
+    true
+  );
   await write('src/index.js', 'module.exports = {};');
   await mkdir(resolve(directory, 'public/uploads'), { recursive: true });
   let strapi: Core.Strapi | undefined;

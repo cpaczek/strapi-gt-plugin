@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+const readerUrl = `http://127.0.0.1:${process.env.READER_PORT ?? '3000'}`;
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -7,14 +8,14 @@ export default defineConfig({
   timeout: 120_000,
   expect: { timeout: 15_000 },
   use: {
-    baseURL: 'http://127.0.0.1:3000',
+    baseURL: readerUrl,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: 'node ../../../scripts/testbed/demo.mjs --isolated',
-    url: 'http://127.0.0.1:3000/en',
+    url: `${readerUrl}/en`,
     reuseExistingServer: false,
     timeout: 180_000,
   },

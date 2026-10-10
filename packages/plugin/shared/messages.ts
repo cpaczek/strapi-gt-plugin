@@ -147,10 +147,17 @@ const definitions = {
   },
   interruptedRequest: {
     code: 'interrupted-request',
-    happened: 'The worker stopped before a GT request result was saved',
+    happened: 'The translation request ended before its result was saved',
     why: 'GT may already have accepted and billed this request',
     fix: 'Check the job in GT before retrying',
     fallback: 'Keep the current content while you review the request',
+  },
+  mediaUnavailable: {
+    code: 'media-unavailable',
+    happened: 'Localized media text could not be loaded',
+    fix: 'Review the translation job and saved media metadata',
+    fallback: 'The shared media text is shown',
+    level: 'warning',
   },
 } satisfies Record<string, MessageParts>;
 
@@ -169,6 +176,7 @@ export const messages = {
   settingsSaved: () => buildMessage(definitions.settingsSaved),
   mediaSaved: () => buildMessage(definitions.mediaSaved),
   interruptedRequest: () => buildMessage(definitions.interruptedRequest),
+  mediaUnavailable: () => buildMessage(definitions.mediaUnavailable),
   jobsQueued: (count: number) =>
     buildMessage({
       code: 'jobs-queued',

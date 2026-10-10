@@ -428,3 +428,31 @@ describe('component references and incomplete populated values', () => {
     expect(prepared.protectedPaths).toEqual(['["photo","caption"]']);
   });
 });
+
+describe('database serialization order', () => {
+  it('accepts a saved plan after JSONB reorders schema and document object keys', () => {
+    const prepared = prepare(
+      prepareInput({
+        title: 'Hello',
+        body: '# Heading',
+        card: { heading: 'Card', cards: [{ heading: 'Nested' }], count: 4 },
+      })
+    );
+    const reordered = structuredClone(prepared);
+    reordered.input.schema.attributes = Object.fromEntries(
+      Object.entries(reordered.input.schema.attributes).sort(([left], [right]) =>
+        right.localeCompare(left)
+      )
+    );
+    reordered.input.components = Object.fromEntries(
+      Object.entries(reordered.input.components).map(([name, schema]) => [
+        name,
+        { ...schema, attributes: Object.fromEntries(Object.entries(schema.attributes).reverse()) },
+      ])
+    );
+    reordered.input.source = Object.fromEntries(Object.entries(reordered.input.source).reverse());
+    expect(apply(reordered, identity(prepared.segments))).toEqual(
+      apply(prepared, identity(prepared.segments))
+    );
+  });
+});

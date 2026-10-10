@@ -78,11 +78,11 @@ const resolveVersions = async (
   );
 await writeFile(
   resolve(appDirectory, 'package.json'),
-  `${JSON.stringify({ name: 'fresh-gt-install', version: '0.0.0', private: true, scripts: { build: 'strapi build', start: 'strapi start', smoke: 'node smoke.mjs' }, dependencies: { ...(await resolveVersions(playgroundManifest.dependencies)), 'strapi-plugin-general-translation': `file:${resolve(directory, tarball)}` }, devDependencies: await resolveVersions(playgroundManifest.devDependencies) }, null, 2)}\n`
+  `${JSON.stringify({ name: 'fresh-gt-install', version: '0.0.0', private: true, scripts: { build: 'strapi build', start: 'strapi start', smoke: 'node smoke.mjs' }, dependencies: { ...(await resolveVersions(playgroundManifest.dependencies)) }, devDependencies: await resolveVersions(playgroundManifest.devDependencies) }, null, 2)}\n`
 );
 await writeFile(
   resolve(appDirectory, 'pnpm-workspace.yaml'),
-  'packages:\n  - .\nallowBuilds:\n  better-sqlite3: true\n  sharp: true\n  esbuild: true\n  "@swc/core": true\n'
+  'packages:\n  - .\nallowBuilds:\n  better-sqlite3: true\n  core-js-pure: false\n  sharp: true\n  esbuild: true\n  "@swc/core": true\n'
 );
 const secret = () => randomBytes(32).toString('hex');
 await writeFile(
@@ -106,7 +106,11 @@ await writeFile(
   { mode: 0o600 }
 );
 await cp(resolve(root, 'scripts/testbed/fresh-smoke.mjs'), resolve(appDirectory, 'smoke.mjs'));
-await run(['install'], appDirectory);
+await cp(
+  resolve(directory, tarball),
+  resolve(appDirectory, 'strapi-plugin-general-translation.tgz')
+);
+await run(['add', './strapi-plugin-general-translation.tgz'], appDirectory);
 await run(['build'], appDirectory);
 await run(['smoke'], appDirectory);
 process.stdout.write(`Fresh tarball installation passed: ${appDirectory}\n`);

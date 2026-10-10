@@ -319,8 +319,16 @@ const apply = (
   const { units } = select(input);
   const expected = units.flatMap((unit) => unit.segments);
   if (
-    hashValue(expected.map((entry) => ({ ...entry, path: [...entry.path] }))) !==
-    hashValue(prepared.segments.map((entry) => ({ ...entry, path: [...entry.path] })))
+    hashValue(
+      expected
+        .map((entry) => ({ ...entry, path: [...entry.path] }))
+        .sort((left, right) => left.id.localeCompare(right.id))
+    ) !==
+    hashValue(
+      prepared.segments
+        .map((entry) => ({ ...entry, path: [...entry.path] }))
+        .sort((left, right) => left.id.localeCompare(right.id))
+    )
   )
     throw invalidTranslation('The saved translation segments no longer match the source snapshot');
   if (
