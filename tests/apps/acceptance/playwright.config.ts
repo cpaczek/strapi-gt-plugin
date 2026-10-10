@@ -22,6 +22,7 @@ export default defineConfig({
           command: 'node ../../../scripts/testbed/demo.mjs --isolated',
           url: `${readerUrl}/en`,
           reuseExistingServer: false,
+          env: { TESTBED_MOCK_CONTROLS: 'true' },
           timeout: 180_000,
         },
 });

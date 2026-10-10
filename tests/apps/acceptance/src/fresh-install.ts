@@ -119,12 +119,18 @@ await cp(
 await run(['add', './strapi-plugin-general-translation.tgz'], appDirectory);
 await run(['build'], appDirectory);
 const mockKey = randomBytes(32).toString('hex');
-const mock = await startMockGt({ apiKey: mockKey });
+const controlToken = randomBytes(32).toString('hex');
+const mock = await startMockGt({ apiKey: mockKey, controlToken });
+const controlFile = resolve(appDirectory, 'mock-control.json');
+await writeFile(controlFile, JSON.stringify({ url: mock.url, token: controlToken }), {
+  mode: 0o600,
+});
 try {
   await run(['smoke'], appDirectory, {
     GT_API_KEY: mockKey,
     GT_PROJECT_ID: 'editorial',
     GT_BASE_URL: mock.url,
+    TESTBED_MOCK_CONTROL_FILE: controlFile,
     TESTBED_BROWSER_HELPER: resolve(root, 'tests/apps/acceptance/src/fresh-browser.mjs'),
     TESTBED_PARITY_HELPER: resolve(root, 'tests/apps/acceptance/src/fresh-parity.mjs'),
   });

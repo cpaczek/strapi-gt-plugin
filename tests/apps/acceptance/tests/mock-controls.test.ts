@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { startMockGt, type MockGtServer } from '../src/mock-gt';
+import { isLoopbackAddress, startMockGt, type MockGtServer } from '../src/mock-gt';
 
 const servers: MockGtServer[] = [];
 afterEach(async () => {
@@ -91,5 +91,27 @@ describe('explicit local mock controls', () => {
         })
       ).status
     ).toBe(429);
+  });
+});
+
+describe('control socket boundary', () => {
+  it.each(['127.0.0.1', '127.2.3.4', '::1', '::ffff:127.0.0.1'])(
+    'accepts the loopback socket %s',
+    (address) => {
+      expect(isLoopbackAddress(address)).toBe(true);
+    }
+  );
+  it.each([
+    undefined,
+    '',
+    'localhost',
+    '0.0.0.0',
+    '192.168.1.2',
+    '::',
+    '::ffff:192.168.1.2',
+    '127.0.0.1.example',
+    '127.0.0.256',
+  ])('rejects a non-loopback or invalid socket %s', (address) => {
+    expect(isLoopbackAddress(address)).toBe(false);
   });
 });

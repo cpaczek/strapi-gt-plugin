@@ -117,6 +117,7 @@ try {
         ADMIN_URL: origin.origin,
         READER_PORT: String(port),
         TESTBED_ACCOUNT_FILE: accountFile,
+        TESTBED_MOCK_CONTROL_FILE: process.env.TESTBED_MOCK_CONTROL_FILE,
         TESTBED_EXTERNAL_SERVER: 'true',
       },
       timeout: 900000,

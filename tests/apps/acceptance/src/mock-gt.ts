@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createServer, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
+import { isIP } from 'node:net';
 import type {
   DownloadFilesResponse,
   EnqueueFileTranslationsResponse,
@@ -101,7 +102,17 @@ interface MockOptions {
   port?: number;
   projectId?: string;
   identity?: boolean;
+  controlToken?: string;
 }
+
+export const isLoopbackAddress = (address: string | undefined): boolean => {
+  if (!address) return false;
+  const normalized = address.toLowerCase();
+  if (normalized === '::1') return true;
+  const ipv4 = normalized.startsWith('::ffff:') ? normalized.slice('::ffff:'.length) : normalized;
+  return isIP(ipv4) === 4 && ipv4.startsWith('127.');
+};
+const controlStatus = z.strictObject({ status: z.enum(['processing', 'completed']) });
 
 const send = (
   response: ServerResponse,
@@ -162,6 +173,35 @@ export const startMockGt = async (options: MockOptions): Promise<MockGtServer> =
       const raw = Buffer.concat(chunks).toString('utf8');
       const body: unknown = raw ? JSON.parse(raw) : undefined;
       const path = new URL(request.url ?? '/', 'http://localhost').pathname;
+      if (path.startsWith('/__test__/')) {
+        if (!options.controlToken) {
+          send(response, 404, { error: 'Unknown mock endpoint' });
+          return;
+        }
+        if (!isLoopbackAddress(request.socket.remoteAddress)) {
+          send(response, 403, { error: 'Controls require a loopback client' });
+          return;
+        }
+        if (request.headers.authorization !== `Bearer ${options.controlToken}`) {
+          send(response, 401, { error: 'Invalid control credentials' });
+          return;
+        }
+        if (request.method === 'POST' && path === '/__test__/job-status') {
+          state.status = controlStatus.parse(body).status;
+          send(response, 200, { status: state.status });
+        } else if (request.method === 'GET' && path === '/__test__/requests') {
+          const count = (endpoint: string) =>
+            requests.filter((entry) => entry.path === endpoint).length;
+          send(response, 200, {
+            runtimeRequests: count('/v2/translate'),
+            uploads: count('/v2/project/files/upload-files'),
+            enqueues: count('/v2/project/translations/enqueue'),
+            polls: count('/v2/project/jobs/info'),
+            downloads: count('/v2/project/files/download'),
+          });
+        } else send(response, 404, { error: 'Unknown control endpoint' });
+        return;
+      }
       requests.push({
         method: request.method ?? 'GET',
         path,
