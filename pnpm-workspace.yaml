@@ -91,3 +91,8 @@ packageExtensions:
   '@strapi/strapi@5.57.0':
     dependencies:
       '@strapi/design-system': '2.2.4'
+  '@strapi/design-system@2.2.4':
+    dependencies:
+      '@codemirror/language': '6.13.1'
+      '@codemirror/commands': '6.11.1'
+      '@codemirror/lint': '6.9.7'
