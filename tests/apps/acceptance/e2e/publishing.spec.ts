@@ -5,13 +5,14 @@ import {
   configureTranslation,
   openDocument,
   openSettings,
+  openTranslation,
   saveSettings,
   signIn,
   sourceTitle,
 } from './editor-session';
 
 const translateFrench = async (page: Page): Promise<void> => {
-  await page.getByRole('button', { name: 'Translate', exact: true }).first().click();
+  await openTranslation(page);
   const modal = page.getByRole('dialog', { name: 'Translate content' });
   await modal.getByLabel('French (fr)').check();
   await modal.getByLabel('Arabic (ar)').uncheck();
@@ -29,6 +30,10 @@ test('settings connect to GT and meet accessibility requirements', async ({ page
   await saveSettings(page);
   await assertAccessible(page);
   await page.screenshot({ path: '../../../.work/screenshots/plugin-settings.png', fullPage: true });
+  await page
+    .getByRole('heading', { name: 'General Translation', exact: true })
+    .scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '../../../.work/screenshots/plugin-settings-viewport.png' });
 });
 
 test('editor translation stays a draft until publication and reaches the reader', async ({
@@ -43,9 +48,7 @@ test('editor translation stays a draft until publication and reaches the reader'
     automaticMode: 'off',
   });
   const documentId = await openDocument(page);
-  const editorUrl = new URL(page.url());
   await translateFrench(page);
-  await assertAccessible(page);
   await page.screenshot({
     path: '../../../.work/screenshots/plugin-translation-panel.png',
     fullPage: true,
@@ -56,8 +59,7 @@ test('editor translation stays a draft until publication and reaches the reader'
   await expect(
     reader.getByRole('heading', { name: 'This story is not available in this language.' })
   ).toBeVisible();
-  editorUrl.searchParams.set('locale', 'fr');
-  await page.goto(editorUrl.href);
+  await openDocument(page, { documentId, locale: 'fr' });
   await expect(page.getByRole('textbox', { name: /^title\*?$/i }).first()).toHaveValue(
     `[fr] ${sourceTitle}`
   );
@@ -76,6 +78,7 @@ test('editor translation stays a draft until publication and reaches the reader'
   await expect(reader.getByRole('heading', { name: sourceTitle, exact: true })).toBeVisible();
   await assertAccessible(reader);
   await reader.close();
+  await assertAccessible(page);
 
   await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
   await expect(page.getByRole('heading', { name: 'Job history', exact: true })).toBeVisible();
