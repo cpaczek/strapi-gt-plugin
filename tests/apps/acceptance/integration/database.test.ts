@@ -24,6 +24,8 @@ const isStrapiFramework = (
 if (!isStrapiFramework(framework)) throw new TypeError('Strapi public exports are unavailable');
 const { compileStrapi, createStrapi } = framework;
 const runtime: { strapi?: Core.Strapi; database?: TestDatabase; mock?: MockGtServer } = {};
+const isProcessListener = (value: unknown): value is (...arguments_: unknown[]) => void =>
+  typeof value === 'function';
 const preservedListeners = new Map<string | symbol, ReturnType<typeof process.rawListeners>>();
 const articleRecord = z
   .object({
@@ -64,7 +66,8 @@ afterAll(async () => {
     await runtime.strapi.destroy();
     for (const [event, listeners] of preservedListeners)
       for (const listener of listeners) {
-        if (!process.rawListeners(event).includes(listener)) process.on(event, listener);
+        if (isProcessListener(listener) && !process.rawListeners(event).includes(listener))
+          process.on(event, listener);
       }
   }
   if (runtime.mock) await runtime.mock.close();
