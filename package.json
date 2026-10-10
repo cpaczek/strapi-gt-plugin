@@ -17,7 +17,7 @@
     "changeset": "changeset",
     "version-packages": "changeset version",
     "prepare": "lefthook install",
-    "test:coverage": "pnpm --filter strapi-plugin-general-translation exec vitest run --coverage",
+    "test:coverage": "pnpm --filter strapi-plugin-general-translation test --coverage",
     "test:integration": "pnpm --filter @gt/acceptance test:integration",
     "test:e2e": "pnpm --filter @gt/acceptance test:e2e",
     "test:packaging": "pnpm --filter @gt/acceptance test:packaging",

@@ -36,7 +36,7 @@
     "build": "strapi-plugin build --minify",
     "verify": "strapi-plugin verify",
     "watch": "strapi-plugin watch",
-    "test": "vitest run",
+    "test": "node server/test.mjs",
     "typecheck": "tsc -p server/tsconfig.json && tsc -p admin/tsconfig.json",
     "lint": "oxlint server admin shared tests scripts",
     "format": "oxfmt --check server admin shared tests",
