@@ -1,0 +1,17 @@
+pre-commit:
+  parallel: false
+  jobs:
+    - name: lint
+      glob: '*.{ts,tsx,js,mjs,cjs}'
+      run: pnpm exec oxlint --fix {staged_files}
+      stage_fixed: true
+    - name: format
+      glob: '*.{ts,tsx,js,mjs,cjs,json,jsonc,md,yml,yaml,css}'
+      run: pnpm exec oxfmt --write {staged_files}
+      stage_fixed: true
+    - name: prose
+      run: node scripts/check-prose.mjs --staged
+commit-msg:
+  jobs:
+    - name: prose
+      run: node scripts/check-prose.mjs --commit-msg {1}

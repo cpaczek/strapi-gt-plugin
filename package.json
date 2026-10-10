@@ -1,0 +1,37 @@
+{
+  "name": "strapi-general-translation-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "engines": {
+    "node": ">=22.12.0 <=26.x.x"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:tooling": "vitest run --config vitest.tooling.config.ts",
+    "typecheck": "turbo run typecheck",
+    "lint": "node scripts/check-defaults.mjs && node scripts/check-prose.mjs && turbo run lint",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt --check .",
+    "format:fix": "oxfmt --write .",
+    "verify": "pnpm --filter strapi-plugin-general-translation verify",
+    "size": "pnpm --filter strapi-plugin-general-translation size",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "prepare": "lefthook install"
+  },
+  "devDependencies": {
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "oxlint": "catalog:",
+    "oxfmt": "catalog:",
+    "lefthook": "catalog:",
+    "vitest": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@changesets/cli": "catalog:",
+    "@changesets/changelog-git": "catalog:",
+    "@types/node": "catalog:"
+  }
+}

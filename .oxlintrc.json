@@ -1,0 +1,24 @@
+{
+  "plugins": [
+    "typescript",
+    "react",
+    "jsx-a11y"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "typescript/no-explicit-any": "error",
+    "no-var": "error",
+    "no-console": "error",
+    "no-debugger": "error"
+  },
+  "ignorePatterns": [
+    ".work/**",
+    ".worktrees/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "**/node_modules/**"
+  ]
+}

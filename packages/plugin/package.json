@@ -1,0 +1,107 @@
+{
+  "name": "strapi-plugin-general-translation",
+  "version": "0.1.0",
+  "description": "Community plugin for translating localized Strapi content with General Translation.",
+  "license": "MIT",
+  "type": "commonjs",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "strapi",
+    "strapi-plugin",
+    "translation",
+    "i18n"
+  ],
+  "exports": {
+    "./package.json": "./package.json",
+    "./strapi-admin": {
+      "types": "./dist/admin/admin/src/index.d.ts",
+      "source": "./admin/src/index.ts",
+      "import": "./dist/admin/index.mjs",
+      "require": "./dist/admin/index.js",
+      "default": "./dist/admin/index.js"
+    },
+    "./strapi-server": {
+      "types": "./dist/server/server/src/index.d.ts",
+      "source": "./server/src/index.ts",
+      "import": "./dist/server/index.mjs",
+      "require": "./dist/server/index.js",
+      "default": "./dist/server/index.js"
+    }
+  },
+  "strapi": {
+    "kind": "plugin",
+    "name": "general-translation",
+    "displayName": "General Translation",
+    "description": "Translate localized content with your General Translation account."
+  },
+  "engines": {
+    "node": ">=22.12.0 <=26.x.x"
+  },
+  "scripts": {
+    "build": "strapi-plugin build --minify",
+    "verify": "strapi-plugin verify",
+    "watch": "strapi-plugin watch",
+    "test": "vitest run",
+    "typecheck": "tsc -p server/tsconfig.json && tsc -p admin/tsconfig.json",
+    "lint": "oxlint server admin shared tests",
+    "format": "oxfmt --check server admin shared tests",
+    "size": "size-limit"
+  },
+  "dependencies": {
+    "generaltranslation": "catalog:",
+    "@generaltranslation/api": "catalog:",
+    "@generaltranslation/supported-locales": "catalog:",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "@strapi/strapi": "~5.57.0",
+    "@strapi/design-system": "^2.2.4",
+    "@strapi/icons": "^2.2.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-intl": "^6.8.9",
+    "react-router-dom": "^6.30.6",
+    "styled-components": "^6.5.3"
+  },
+  "devDependencies": {
+    "@strapi/strapi": "catalog:",
+    "@strapi/admin": "catalog:",
+    "@strapi/content-manager": "catalog:",
+    "@strapi/types": "catalog:",
+    "@strapi/i18n": "catalog:",
+    "@strapi/sdk-plugin": "catalog:",
+    "@strapi/design-system": "catalog:",
+    "@strapi/icons": "catalog:",
+    "@strapi/typescript-utils": "catalog:",
+    "@strapi/utils": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-intl": "catalog:",
+    "react-router-dom": "catalog:",
+    "styled-components": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@types/node": "catalog:",
+    "@types/koa": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@testing-library/user-event": "catalog:",
+    "jsdom": "catalog:",
+    "oxlint": "catalog:",
+    "oxfmt": "catalog:",
+    "size-limit": "catalog:",
+    "@size-limit/file": "catalog:"
+  },
+  "size-limit": [
+    {
+      "path": "dist/admin/*.mjs",
+      "limit": "65 kB"
+    }
+  ]
+}

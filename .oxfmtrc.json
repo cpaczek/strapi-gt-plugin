@@ -1,0 +1,16 @@
+{
+  "singleQuote": true,
+  "tabWidth": 2,
+  "trailingComma": "es5",
+  "semi": true,
+  "endOfLine": "lf",
+  "ignorePatterns": [
+    ".work/**",
+    ".worktrees/**",
+    "node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.next/**",
+    "pnpm-lock.yaml"
+  ]
+}
