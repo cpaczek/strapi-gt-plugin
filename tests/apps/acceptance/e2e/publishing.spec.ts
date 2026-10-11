@@ -1,3 +1,4 @@
+import { ACCEPTANCE_JOB_TIMEOUT_MS } from '../../../../packages/plugin/shared/constants';
 import { assertAccessible } from './accessibility';
 import { expect, test, type Page } from '@playwright/test';
 import {
@@ -18,7 +19,9 @@ const translateFrench = async (page: Page): Promise<void> => {
   await modal.getByLabel('Arabic (ar)').uncheck();
   await assertAccessible(page, '[role="dialog"]');
   await modal.getByRole('button', { name: 'Translate', exact: true }).click();
-  await expect(page.getByText('Succeeded', { exact: true })).toBeVisible();
+  await expect(page.getByText('Succeeded', { exact: true })).toBeVisible({
+    timeout: ACCEPTANCE_JOB_TIMEOUT_MS,
+  });
   await page.screenshot({ path: '../../../.work/screenshots/plugin-translation-dialog.png' });
   await modal.getByRole('button', { name: 'Close modal', exact: true }).click();
   await expect(modal).not.toBeVisible();

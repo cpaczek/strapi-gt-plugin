@@ -7,6 +7,7 @@ export const GT_BASE_URL = 'https://api.gtx.dev';
 export const GT_API_VERSION = '2026-03-06.v1';
 export const DOCS_URL = 'https://generaltranslation.com/docs';
 export const REQUEST_TIMEOUT_MS = 30_000;
+export const ACCEPTANCE_JOB_TIMEOUT_MS = 60_000;
 export const STRAPI_BASE_URL = 'http://127.0.0.1:1337';
 export const LIVE_SMOKE_TIMEOUT_MS = 600_000;
 export const LIVE_STRAPI_PORT = 1537;
