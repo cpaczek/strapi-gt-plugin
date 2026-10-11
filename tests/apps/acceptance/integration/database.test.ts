@@ -168,10 +168,15 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 const isTranslationRuntime = (
   value: unknown
-): value is Pick<PluginRuntime, 'enqueue' | 'retry' | 'worker' | 'repository'> =>
+): value is Pick<
+  PluginRuntime,
+  'enqueue' | 'retry' | 'worker' | 'repository' | 'savedSettings' | 'saveSettings'
+> =>
   record(value) &&
   typeof value.enqueue === 'function' &&
   typeof value.retry === 'function' &&
+  typeof value.savedSettings === 'function' &&
+  typeof value.saveSettings === 'function' &&
   record(value.worker) &&
   typeof value.worker.stop === 'function' &&
   typeof value.worker.execute === 'function' &&
@@ -341,7 +346,10 @@ it('runs the durable translation with the initiating actor and records public GT
 });
 
 import { afterEach } from 'vitest';
-import type { TranslationRequest } from '../../../../packages/plugin/shared/contracts';
+import type {
+  PluginSettings,
+  TranslationRequest,
+} from '../../../../packages/plugin/shared/contracts';
 
 const translationRuntime = () => {
   const service: unknown = app().plugin('general-translation').service('translation');
@@ -625,5 +633,125 @@ describe('atomic concurrent enqueue', () => {
     }
     await finishTranslation(job.id);
     expect(paidRequests() - before).toBe(1);
+  });
+});
+
+const summaryTarget = z.object({
+  documentId: z.string(),
+  locale: z.string(),
+  title: z.string(),
+  slug: z.string(),
+  summary: z.string().nullable(),
+  editorialNote: z.string().nullable(),
+  readingMinutes: z.number().nullable(),
+});
+const readSummaryTarget = async (documentId: string) =>
+  summaryTarget.parse(
+    await app()
+      .documents('api::article.article')
+      .findOne({ documentId, locale: 'ar', status: 'draft' })
+  );
+const writeSummary = async (documentId: string, locale: string, summary: string | null) => {
+  const fields: Record<string, string | null> = { summary };
+  await app().documents('api::article.article').update({ documentId, locale, data: fields });
+};
+const createSummaryTarget = async () => {
+  const source = await createSource();
+  const summary = `A populated matrix summary for ${source.documentId}`;
+  await writeSummary(source.documentId, 'en', summary);
+  const targetFields: Record<string, string | number | null> = {
+    title: 'Keep the target title',
+    slug: `target-${source.documentId}`,
+    summary: null,
+    editorialNote: 'Keep this manual note',
+    readingMinutes: 47,
+  };
+  await app()
+    .documents('api::article.article')
+    .update({ documentId: source.documentId, locale: 'ar', data: targetFields });
+  return { documentId: source.documentId, summary };
+};
+const enqueueSummary = async (documentId: string, actorId: number, force = false) => {
+  const queued = await translationRuntime().enqueue(
+    { ...translationRequest([documentId]), force },
+    actorId,
+    'translate'
+  );
+  const id = queued.jobs[0]?.id;
+  if (id === undefined) throw new Error('No summary translation was queued');
+  return id;
+};
+
+describe('null source clearing across database stores', () => {
+  let originalSettings: PluginSettings | undefined;
+  beforeAll(async () => {
+    const service = translationRuntime();
+    await service.worker.stop();
+    originalSettings = await service.savedSettings();
+    const article = originalSettings.contentTypes['api::article.article'];
+    if (!article) throw new Error('The matrix article is not configured');
+    await service.saveSettings({
+      ...originalSettings,
+      contentTypes: {
+        ...originalSettings.contentTypes,
+        'api::article.article': {
+          ...article,
+          fields: Object.fromEntries(
+            Object.entries(article.fields).map(([name, rule]) => [
+              name,
+              { ...rule, translate: name === 'summary' },
+            ])
+          ),
+        },
+      },
+    });
+  });
+  afterAll(async () => {
+    if (originalSettings) await translationRuntime().saveSettings(originalSettings);
+  });
+
+  it('clears a machine-owned summary to null with no further paid requests', async () => {
+    const actor = await createEditor();
+    const source = await createSummaryTarget();
+    await finishTranslation(await enqueueSummary(source.documentId, actor.id));
+    const previous = await readSummaryTarget(source.documentId);
+    expect(previous.summary).toBe(`[ar] ${source.summary}`);
+    await writeSummary(source.documentId, 'en', null);
+    expect(
+      await app()
+        .documents('api::article.article')
+        .findOne({ documentId: source.documentId, locale: 'en', status: 'draft' })
+    ).toMatchObject({ summary: null });
+    const before = paidRequests();
+    const id = await enqueueSummary(source.documentId, actor.id);
+    await finishTranslation(id);
+    expect(await translationRuntime().repository.get(id)).toMatchObject({ status: 'succeeded' });
+    expect(await readSummaryTarget(source.documentId)).toEqual({ ...previous, summary: null });
+    expect(paidRequests()).toBe(before);
+  });
+
+  it('protects a manually edited summary until forced null clearing without paid requests', async () => {
+    const actor = await createEditor();
+    const source = await createSummaryTarget();
+    await finishTranslation(await enqueueSummary(source.documentId, actor.id));
+    await writeSummary(source.documentId, 'ar', 'Keep this human summary');
+    const previous = await readSummaryTarget(source.documentId);
+    await writeSummary(source.documentId, 'en', null);
+    const before = paidRequests();
+    const protectedId = await enqueueSummary(source.documentId, actor.id);
+    await translationRuntime().worker.execute();
+    expect(await translationRuntime().repository.get(protectedId)).toMatchObject({
+      status: 'conflict',
+      error: { code: 'human-edit' },
+    });
+    expect(await readSummaryTarget(source.documentId)).toEqual(previous);
+    expect(paidRequests()).toBe(before);
+    const forcedId = await enqueueSummary(source.documentId, actor.id, true);
+    await finishTranslation(forcedId);
+    expect(await translationRuntime().repository.get(forcedId)).toMatchObject({
+      status: 'succeeded',
+    });
+    expect(await readSummaryTarget(source.documentId)).toEqual({ ...previous, summary: null });
+    expect(paidRequests()).toBe(before);
   });
 });
