@@ -29,27 +29,31 @@ const supportedExtensions = new Set([
   '.yaml',
   '.css',
 ]);
+/** @param {string} root @param {string} candidate */
 const isInside = (root, candidate) => {
   const path = relative(root, candidate);
   return path !== '' && path !== '..' && !path.startsWith(`..${sep}`) && !isAbsolute(path);
 };
 
+/** @param {unknown} event @param {string} root */
 export const selectChangedFiles = (event, root) => {
   if (
     !event ||
     typeof event !== 'object' ||
+    !('tool_input' in event) ||
     !event.tool_input ||
     typeof event.tool_input !== 'object'
   )
     return [];
   const input = event.tool_input;
   const paths = [];
-  if (typeof input.file_path === 'string') paths.push(input.file_path);
-  if (typeof input.command === 'string') {
+  if ('file_path' in input && typeof input.file_path === 'string') paths.push(input.file_path);
+  if ('command' in input && typeof input.command === 'string') {
     for (const match of input.command.matchAll(/^\*\*\* (?:Update File|Add File|Move to): (.+)$/gm))
-      paths.push(match[1].trim());
+      if (match[1]) paths.push(match[1].trim());
   }
   const canonicalRoot = realpathSync(root);
+  /** @type {Set<string>} */
   const selected = new Set();
   for (const filename of paths) {
     const candidate = resolve(root, filename);
@@ -75,6 +79,7 @@ export const selectChangedFiles = (event, root) => {
 };
 
 const run = () => {
+  /** @type {unknown} */
   const event = JSON.parse(readFileSync(0, 'utf8'));
   const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
   const files = selectChangedFiles(event, root);

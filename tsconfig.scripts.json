@@ -1,11 +1,9 @@
 {
   "extends": "./tsconfig.base.json",
-  "compilerOptions": { "types": ["node"] },
-  "include": [
-    "scripts/testbed/live-demo.ts",
-    "scripts/live-demo.test.ts",
-    "scripts/testbed/demo.ts",
-    "scripts/demo.test.ts",
-    "scripts/demo-descendants.test.ts"
-  ]
+  "compilerOptions": {
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["scripts/**/*.ts", "scripts/**/*.tsx", "*.ts"]
 }

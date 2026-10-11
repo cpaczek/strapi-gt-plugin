@@ -2,15 +2,20 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseSyntax, walkSyntax } from './source-syntax.mjs';
+import { parseSyntax, walkSyntax, syntaxRecord } from './source-syntax.mjs';
 
+/** @type {unknown} */
 const bannedPhrases = JSON.parse(
   readFileSync(new URL('./banned-phrases.json', import.meta.url), 'utf8')
 );
+if (!Array.isArray(bannedPhrases) || !bannedPhrases.every((phrase) => typeof phrase === 'string'))
+  throw new TypeError('Expected a list of prohibited phrases');
 const fixturePaths = new Set(['scripts/banned-phrases.json', 'scripts/checks.test.ts']);
+/** @param {string} phrase */
 const escapePattern = (phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const patterns = bannedPhrases.map((phrase) => new RegExp(`\\b${escapePattern(phrase)}\\b`, 'gi'));
 
+/** @param {string} source @param {string} filename */
 const proseFragments = (source, filename) => {
   if (!/\.[cm]?[jt]sx?$/.test(filename)) return [source];
   const parsed = parseSyntax(source, filename);
@@ -18,14 +23,23 @@ const proseFragments = (source, filename) => {
   walkSyntax(parsed.program, (node) => {
     if ((node.type === 'Literal' || node.type === 'JSXText') && typeof node.value === 'string')
       fragments.push(node.value);
-    if (node.type === 'TemplateLiteral')
+    if (node.type === 'TemplateLiteral' && Array.isArray(node.quasis))
       fragments.push(
-        node.quasis.map((part) => part.value.cooked ?? part.value.raw).join(' {value} ')
+        node.quasis
+          .map((part) => {
+            if (!syntaxRecord(part) || !syntaxRecord(part.value))
+              throw new TypeError('Expected a template fragment');
+            const fragment = part.value.cooked ?? part.value.raw;
+            if (typeof fragment !== 'string') throw new TypeError('Expected template text');
+            return fragment;
+          })
+          .join(' {value} ')
       );
   });
   return fragments;
 };
 
+/** @param {string} source @param {string} filename */
 export const checkProse = (source, filename) => {
   const findings = [];
   for (const fragment of proseFragments(source, filename)) {
@@ -45,6 +59,7 @@ export const checkProse = (source, filename) => {
   return findings;
 };
 
+/** @param {unknown} range @param {string} [cwd] */
 export const readCommitMessages = (range, cwd = process.cwd()) => {
   if (typeof range !== 'string' || !range || range.startsWith('-')) {
     throw new TypeError('Provide a Git revision or revision range.');

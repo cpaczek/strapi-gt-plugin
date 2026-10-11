@@ -3,9 +3,13 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
+const record = (value) => typeof value === 'object' && value !== null;
+
 const requiredPeers = ['react', 'react-dom', 'react-router-dom', 'styled-components'];
+/** @param {unknown} catalog @param {unknown} dependencies */
 export const checkStrapiPeerPins = (catalog, dependencies) => {
-  if (!catalog || typeof catalog !== 'object' || !dependencies || typeof dependencies !== 'object')
+  if (!record(catalog) || !record(dependencies))
     throw new TypeError(
       'Read the root catalog and playground dependencies before checking peer pins.'
     );
@@ -19,11 +23,16 @@ export const checkStrapiPeerPins = (catalog, dependencies) => {
 };
 
 const run = () => {
+  /** @type {unknown} */
   const workspace = parse(readFileSync(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8'));
+  /** @type {unknown} */
   const manifest = JSON.parse(
     readFileSync(new URL('../playground/package.json', import.meta.url), 'utf8')
   );
-  const findings = checkStrapiPeerPins(workspace.catalog, manifest.dependencies);
+  const findings = checkStrapiPeerPins(
+    record(workspace) ? workspace.catalog : null,
+    record(manifest) ? manifest.dependencies : null
+  );
   if (findings.length) {
     process.stderr.write(`${findings.join('\n')}\n`);
     process.exitCode = 1;
