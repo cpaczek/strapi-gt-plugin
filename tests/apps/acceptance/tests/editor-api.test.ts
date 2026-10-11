@@ -18,7 +18,12 @@ type ServerEvent = z.infer<typeof eventSchema>;
 
 const withApi = async (
   pooled: boolean,
-  run: (api: APIRequestContext, worker: Worker, events: ServerEvent[], idleDeadlineMs: number) => Promise<void>
+  run: (
+    api: APIRequestContext,
+    worker: Worker,
+    events: ServerEvent[],
+    idleDeadlineMs: number
+  ) => Promise<void>
 ): Promise<void> => {
   const worker = new Worker(new URL('../src/idle-api-server.mjs', import.meta.url));
   const events: ServerEvent[] = [];
@@ -44,12 +49,13 @@ const crossIdleDeadline = async (
   worker: Worker,
   events: ServerEvent[],
   idleDeadlineMs: number
-): Promise<ReturnType<APIRequestContext['get']>> => {
+): ReturnType<APIRequestContext['get']> => {
   expect((await api.get('/warm')).status()).toBe(200);
   expect((await api.get('/warm-again')).status()).toBe(200);
   await expect.poll(() => events.filter((event) => event.event === 'finish').length).toBe(2);
   const completed = events.filter((event) => event.event === 'finish').at(-1)?.time;
-  if (completed === undefined) throw new Error('The API server did not report its response deadline');
+  if (completed === undefined)
+    throw new Error('The API server did not report its response deadline');
   worker.postMessage({ event: 'block', until: completed + idleDeadlineMs + 150 });
   // Issue just before the server's idle deadline, then let its blocked loop cross that deadline.
   await reachDeadline(Math.max(0, completed + idleDeadlineMs - 50 - performance.now()));
@@ -60,14 +66,18 @@ describe('editor API transport', () => {
   it('completes a request when Strapi is busy across a prior socket idle deadline', async () => {
     await withApi(false, async (api, worker, events, deadline) => {
       expect((await crossIdleDeadline(api, worker, events, deadline)).status()).toBe(200);
-      expect(events.filter((event) => event.event === 'request').map((event) => event.connectionId)).toEqual([1, 2, 3]);
+      expect(
+        events.filter((event) => event.event === 'request').map((event) => event.connectionId)
+      ).toEqual([1, 2, 3]);
     });
   }, 15000);
 
   it('reproduces the reset for the default pooled client as a negative control', async () => {
     await withApi(true, async (api, worker, events, deadline) => {
       await expect(crossIdleDeadline(api, worker, events, deadline)).rejects.toThrow('ECONNRESET');
-      expect(events.filter((event) => event.event === 'request').map((event) => event.path)).toEqual(['/warm', '/warm-again']);
+      expect(
+        events.filter((event) => event.event === 'request').map((event) => event.path)
+      ).toEqual(['/warm', '/warm-again']);
     });
   }, 15000);
 

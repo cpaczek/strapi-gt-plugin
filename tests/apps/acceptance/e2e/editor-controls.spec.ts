@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   expect,
-  request,
   test as base,
   type APIRequestContext,
   type BrowserContext,
@@ -12,6 +11,7 @@ import {
 } from '@playwright/test';
 import { z } from 'zod';
 import { readMockControls } from '../src/mock-controls';
+import { createEditorApi } from '../src/editor-api';
 import { messages } from '../../../../packages/plugin/shared/messages';
 import { jobsSchema, enqueueSchema } from '../../../../packages/plugin/admin/src/api';
 import { assertAccessible } from './accessibility';
@@ -56,11 +56,7 @@ const authenticatedApi = async (page: Page, account?: TestAccount): Promise<APIR
     .object({ data: z.object({ token: z.string(), user: z.object({ email: z.string() }) }) })
     .parse(await login.json());
   if (account) expect(credentials.data.user.email).toBe(account.email);
-  return request.newContext({
-    baseURL: adminOrigin,
-    storageState: { cookies: [], origins: [] },
-    extraHTTPHeaders: { Authorization: `Bearer ${credentials.data.token}` },
-  });
+  return createEditorApi(adminOrigin, credentials.data.token);
 };
 interface AdminSession {
   api: APIRequestContext;
@@ -1049,11 +1045,15 @@ test('a read-only editor cannot see translation actions or call their endpoints'
       exact: true,
     });
     if (await actionMenu.isVisible()) {
-      await actionMenu.click();
-      await expect(
-        restrictedPage.getByRole('menuitem', { name: 'Translate', exact: true })
-      ).toHaveCount(0);
-      await restrictedPage.keyboard.press('Escape');
+      if (await actionMenu.isEnabled()) {
+        await actionMenu.click();
+        await expect(
+          restrictedPage.getByRole('menuitem', { name: 'Translate', exact: true })
+        ).toHaveCount(0);
+        await restrictedPage.keyboard.press('Escape');
+      } else {
+        await expect(actionMenu).toBeDisabled();
+      }
     }
     await expect(restrictedPage.getByText('Translation', { exact: true })).toHaveCount(0);
     const response = await restrictedApi.post('/general-translation/translate', {

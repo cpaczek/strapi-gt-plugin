@@ -7,7 +7,11 @@ const port = parentPort;
 const connections = new WeakMap();
 let connectionId = 0;
 const server = createServer((request, response) => {
-  port.postMessage({ event: 'request', connectionId: connections.get(request.socket), path: request.url });
+  port.postMessage({
+    event: 'request',
+    connectionId: connections.get(request.socket),
+    path: request.url,
+  });
   if (request.url === '/disconnect') {
     request.socket.destroy();
     return;
@@ -20,12 +24,18 @@ server.keepAliveTimeout = 5000;
 server.keepAliveTimeoutBuffer = 1000;
 server.on('connection', (socket) => {
   connections.set(socket, ++connectionId);
-  socket.on('timeout', () => port.postMessage({ event: 'timeout', connectionId: connections.get(socket) }));
+  socket.on('timeout', () =>
+    port.postMessage({ event: 'timeout', connectionId: connections.get(socket) })
+  );
 });
 server.listen(0, '127.0.0.1', () => {
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('The fixture has no TCP address');
-  port.postMessage({ event: 'listening', port: address.port, idleDeadlineMs: server.keepAliveTimeout + server.keepAliveTimeoutBuffer });
+  port.postMessage({
+    event: 'listening',
+    port: address.port,
+    idleDeadlineMs: server.keepAliveTimeout + server.keepAliveTimeoutBuffer,
+  });
 });
 port.on('message', (/** @type {unknown} */ message) => {
   if (!message || typeof message !== 'object' || !('event' in message))

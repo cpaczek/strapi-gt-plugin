@@ -5,5 +5,6 @@ export const createEditorApi = (origin: string, token: string): Promise<APIReque
   request.newContext({
     baseURL: loopbackOrigin(origin),
     storageState: { cookies: [], origins: [] },
-    extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+    // The independent Strapi process can cross its idle socket deadline during synchronous work.
+    extraHTTPHeaders: { Connection: 'close', Authorization: `Bearer ${token}` },
   });
