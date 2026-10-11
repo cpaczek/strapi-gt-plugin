@@ -3,6 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promis
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { z } from 'zod';
+import { cleanupTestResources } from './cleanup-resources';
 import { startMockGt } from './mock-gt';
 import { runSafeCommand } from '../../../../scripts/testbed/safe-command.mjs';
 const root = resolve(import.meta.dirname, '../../../..');
@@ -109,7 +110,7 @@ await writeFile(
   { mode: 0o600 }
 );
 await cp(resolve(root, 'scripts/testbed/fresh-smoke.mjs'), resolve(appDirectory, 'smoke.mjs'));
-for (const helper of ['safe-command.mjs', 'owned-process.mjs'])
+for (const helper of ['safe-command.mjs', 'owned-process.mjs', 'cleanup-resources.mjs'])
   await cp(resolve(root, 'scripts/testbed', helper), resolve(appDirectory, helper));
 await cp(
   resolve(directory, tarball),
@@ -120,11 +121,12 @@ await run(['build'], appDirectory);
 const mockKey = randomBytes(32).toString('hex');
 const controlToken = randomBytes(32).toString('hex');
 const mock = await startMockGt({ apiKey: mockKey, controlToken });
-const controlFile = resolve(appDirectory, 'mock-control.json');
-await writeFile(controlFile, JSON.stringify({ url: mock.url, token: controlToken }), {
-  mode: 0o600,
-});
+const failures: unknown[] = [];
 try {
+  const controlFile = resolve(appDirectory, 'mock-control.json');
+  await writeFile(controlFile, JSON.stringify({ url: mock.url, token: controlToken }), {
+    mode: 0o600,
+  });
   await run(['smoke'], appDirectory, {
     GT_API_KEY: mockKey,
     GT_PROJECT_ID: 'editorial',
@@ -135,7 +137,8 @@ try {
   });
   if (!mock.requests.some((request) => request.path === '/v2/translate'))
     throw new Error('Packed translation did not reach the recording GT service');
-} finally {
-  await mock.close();
+} catch (failure) {
+  failures.push(failure);
 }
+await cleanupTestResources([() => mock.close()], failures);
 process.stdout.write(`Fresh tarball installation passed: ${appDirectory}\n`);
