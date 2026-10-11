@@ -41,7 +41,7 @@ interface SourceDocument {
 interface EditorFixture {
   api: APIRequestContext;
   createSource: (prefix: string) => Promise<SourceDocument>;
-  createAccount: (canTranslate: boolean) => Promise<TestAccount>;
+  createAccount: (canTranslate: boolean, uidTitleRead?: boolean) => Promise<TestAccount>;
 }
 const authenticatedApi = async (page: Page, account?: TestAccount): Promise<APIRequestContext> => {
   const [login] = await Promise.all([
@@ -121,7 +121,7 @@ const test = base.extend<{ editor: EditorFixture }, { adminSession: AdminSession
           owned.documents.push(source.documentId);
           return source;
         },
-        async createAccount(canTranslate) {
+        async createAccount(canTranslate, uidTitleRead) {
           const identifier = randomUUID();
           const roleResponse = await api.post('/admin/roles', {
             data: {
@@ -133,12 +133,32 @@ const test = base.extend<{ editor: EditorFixture }, { adminSession: AdminSession
           const role = identified.parse(await roleResponse.json()).data.id;
           owned.roles.push(role);
           const actions = canTranslate ? ['read', 'create', 'update'] : ['read'];
-          const permissions = actions.map((action) => ({
-            action: `plugin::content-manager.explorer.${action}`,
-            subject: model,
-            properties: { fields: ['title', 'slug', 'summary'], locales: ['en', 'fr', 'ar'] },
-            conditions: [],
-          }));
+          const permissions = actions.flatMap((action) => {
+            const base = {
+              action: `plugin::content-manager.explorer.${action}`,
+              subject: model,
+              conditions: [],
+            };
+            if (uidTitleRead !== undefined && action === 'read')
+              return [
+                {
+                  ...base,
+                  properties: {
+                    fields: uidTitleRead ? ['title', 'slug'] : ['slug'],
+                    locales: ['en', 'fr'],
+                  },
+                },
+              ];
+            return [
+              {
+                ...base,
+                properties: {
+                  fields: uidTitleRead === undefined ? ['title', 'slug', 'summary'] : ['slug'],
+                  locales: ['en', 'fr', 'ar'],
+                },
+              },
+            ];
+          });
           const permissionResponse = await api.put(`/admin/roles/${role}/permissions`, {
             data: {
               permissions: [
@@ -1322,3 +1342,160 @@ test('native profile language selection loads Spanish, French and Arabic plugin 
     ).toBe(200);
   }
 });
+
+for (const force of [false, true]) {
+  test(`UID dependency Read is enforced in the native editor and published reader with force ${force}`, async ({
+    page,
+    editor,
+    browser,
+    context,
+  }) => {
+    const controls = await readMockControls();
+    await selectTranslationFields(page, ['slug']);
+    const source = await editor.createSource('UID permission source');
+    const publishLocale = async (locale: string) => {
+      await openDocument(page, { documentId: source.documentId, locale });
+      const published = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname ===
+            `${collection}/${source.documentId}/actions/publish` &&
+          response.request().method() === 'POST'
+      );
+      await page.getByRole('button', { name: 'Publish', exact: true }).click();
+      expect((await published).status()).toBe(200);
+    };
+    await publishLocale('en');
+    const targetTitle = `Reserved target title ${randomUUID()}`;
+    const originalSlug = force ? `human-slug-${randomUUID()}` : null;
+    const created = await editor.api.put(`${collection}/${source.documentId}?locale=fr`, {
+      data: { title: targetTitle, slug: originalSlug },
+    });
+    expect(created.status()).toBe(200);
+    const before = await controls.counters();
+    const deniedAccount = await editor.createAccount(true, false);
+    const deniedContext = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const deniedPage = await deniedContext.newPage();
+    const deniedApi = await authenticatedApi(deniedPage, deniedAccount);
+    try {
+      const visible = await deniedApi.get(`${collection}/${source.documentId}?locale=fr`);
+      expect(visible.status()).toBe(200);
+      const sanitized = z
+        .object({ data: z.object({ title: z.unknown().optional(), slug: z.string().nullable() }) })
+        .parse(await visible.json());
+      expect(sanitized.data.title).toBeUndefined();
+      expect(sanitized.data.slug).toBe(originalSlug);
+      await deniedPage.goto(
+        `${adminOrigin}/admin${collection}/${source.documentId}?plugins[i18n][locale]=en`
+      );
+      await expect(deniedPage.getByRole('textbox', { name: /^slug\*?$/i }).first()).toBeVisible();
+      await expect(deniedPage.getByRole('textbox', { name: /^title\*?$/i })).toHaveValue('');
+      await expect(deniedPage.getByRole('textbox', { name: /^title\*?$/i })).toBeDisabled();
+      await openTranslation(deniedPage);
+      const modal = deniedPage.getByRole('dialog', { name: 'Translate content' });
+      await modal.getByRole('checkbox', { name: 'French (fr)', exact: true }).check();
+      await modal.getByRole('checkbox', { name: 'Arabic (ar)', exact: true }).uncheck();
+      if (force) {
+        await modal.getByRole('checkbox', { name: 'Force retranslate', exact: true }).check();
+        await modal
+          .getByRole('checkbox', {
+            name: 'I reviewed the target content and accept replacing human edits',
+            exact: true,
+          })
+          .check();
+      }
+      const denied = deniedPage.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/general-translation/translate' &&
+          response.request().method() === 'POST'
+      );
+      await modal
+        .getByRole('button', { name: force ? 'Force retranslate' : 'Translate', exact: true })
+        .click();
+      expect((await denied).status()).toBe(403);
+      await expect(
+        modal.getByText(messages.permissionDenied().text, { exact: true })
+      ).toBeVisible();
+      await expect(deniedPage.getByText(targetTitle, { exact: true })).toHaveCount(0);
+      expect(await readDocumentJobs(deniedApi, source.documentId)).toEqual([]);
+      const retained = await editor.api.get(`${collection}/${source.documentId}?locale=fr`);
+      expect(
+        z
+          .object({ data: z.object({ title: z.string(), slug: z.string().nullable() }) })
+          .parse(await retained.json()).data
+      ).toEqual({ title: targetTitle, slug: originalSlug });
+      expect(await controls.counters()).toEqual(before);
+      await deniedPage.screenshot({
+        path: `../../../.work/screenshots/uid-denied-force-${force}.png`,
+        fullPage: true,
+      });
+    } finally {
+      await deniedApi.dispose();
+      await deniedContext.close();
+    }
+    const allowedAccount = await editor.createAccount(true, true);
+    const allowedContext = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const allowedPage = await allowedContext.newPage();
+    const allowedApi = await authenticatedApi(allowedPage, allowedAccount);
+    try {
+      await openDocument(allowedPage, { documentId: source.documentId, locale: 'fr' });
+      await expect(allowedPage.getByRole('textbox', { name: /^title\*?$/i }).first()).toHaveValue(
+        targetTitle
+      );
+      await expect(
+        allowedPage.getByRole('textbox', { name: /^title\*?$/i }).first()
+      ).toBeDisabled();
+      await openDocument(allowedPage, source);
+      const ids = await queueFrench(allowedPage, force);
+      expect(
+        (await awaitTerminalJobs(allowedApi, source.documentId, ids)).map((job) => job.status)
+      ).toEqual(['succeeded']);
+    } finally {
+      await allowedApi.dispose();
+      await allowedContext.close();
+    }
+    const slug = targetTitle.toLowerCase().replaceAll(' ', '-');
+    const draft = await editor.api.get(`${collection}/${source.documentId}?locale=fr`);
+    expect(
+      z
+        .object({ data: z.object({ title: z.string(), slug: z.string() }) })
+        .parse(await draft.json()).data
+    ).toEqual({ title: targetTitle, slug });
+    expect(await controls.counters()).toEqual(before);
+    const reader = await context.newPage();
+    try {
+      await reader.goto(`/fr/articles/${source.documentId}`);
+      await expect(
+        reader.getByRole('heading', { name: 'This story is not available in this language.' })
+      ).toBeVisible();
+      await publishLocale('fr');
+      await reader.reload();
+      await expect(reader.getByRole('heading', { name: targetTitle, exact: true })).toBeVisible();
+      const publishedContent = await fetch(
+        `${adminOrigin}/api/articles/${source.documentId}?locale=fr`
+      );
+      expect(publishedContent.status).toBe(200);
+      expect(
+        z
+          .object({ data: z.object({ title: z.string(), slug: z.string() }) })
+          .parse(await publishedContent.json()).data
+      ).toEqual({ title: targetTitle, slug });
+      await reader.screenshot({
+        path: `../../../.work/screenshots/uid-published-force-${force}.png`,
+        fullPage: true,
+      });
+      await base.info().attach('uid-permission-boundary', {
+        contentType: 'application/json',
+        body: JSON.stringify({
+          force,
+          deniedStatus: 403,
+          originalSlug,
+          publishedSlug: slug,
+          titleUnchanged: true,
+          translationRequestsAdded: 0,
+        }),
+      });
+    } finally {
+      await reader.close();
+    }
+  });
+}
