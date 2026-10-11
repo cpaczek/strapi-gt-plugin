@@ -5,6 +5,15 @@
 This community plugin translates selected localized Strapi fields through your General Translation account.
 Editors translate one entry or a selection, review per-locale jobs, and preserve human changes unless they explicitly force a replacement.
 
+### Demo
+
+Write an article in Strapi, translate it into French and Arabic, publish the versions,
+and switch languages on the Next.js blog. This 79-second silent demo also shows
+field context, slug settings, human-edit protection, localized media, bulk translation,
+and automatic triggers. Typing is sped up and waiting time is shortened.
+
+https://github.com/user-attachments/assets/1278398e-ea26-4714-9523-5d95ba0cdb1c
+
 ## Screenshots
 
 General Translation settings in the real Strapi playground:
@@ -14,7 +23,6 @@ General Translation settings in the real Strapi playground:
 The Ender Post example reads published articles from Strapi:
 
 ![The Ender Post with its language links and first published fan story](docs/screenshots/ender-post.png)
-
 
 ## Compatibility
 
