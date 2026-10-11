@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createServer, type ServerResponse } from 'node:http';
 import { once } from 'node:events';
-import { isIP } from 'node:net';
+import { isIP, type Socket } from 'node:net';
 import type {
   DownloadFilesResponse,
   EnqueueFileTranslationsResponse,
@@ -97,7 +97,15 @@ export interface MockGtServer {
   setJobStatus: (status: JobStatus) => void;
   close: () => Promise<void>;
 }
+export interface MockConnectionEvent {
+  event: 'connection' | 'request' | 'response-finish' | 'timeout' | 'close';
+  at: string;
+  connectionId?: number;
+  idleDeadlineMs?: number;
+  hadError?: boolean;
+}
 interface MockOptions {
+  onConnectionEvent?: (event: MockConnectionEvent) => void;
   apiKey: string;
   port?: number;
   projectId?: string;
@@ -134,6 +142,8 @@ const stamp = '2026-01-01T00:00:00.000Z';
 
 export const startMockGt = async (options: MockOptions): Promise<MockGtServer> => {
   const requests: RecordedRequest[] = [];
+  const connections = new WeakMap<Socket, number>();
+  let connectionId = 0;
   const failures: Failure[] = [];
   const failedEntries = new Set<string>();
   const files = new Map<string, MockFile>();
@@ -160,6 +170,20 @@ export const startMockGt = async (options: MockOptions): Promise<MockGtServer> =
     state.status === 'completed' &&
     [...jobs.values()].some((job) => key(job.file) === key(file) && job.locale === file.locale);
   const server = createServer(async (request, response) => {
+    const id = connections.get(request.socket);
+    options.onConnectionEvent?.({
+      event: 'request',
+      at: new Date().toISOString(),
+      connectionId: id,
+    });
+    response.once('finish', () =>
+      options.onConnectionEvent?.({
+        event: 'response-finish',
+        at: new Date().toISOString(),
+        connectionId: id,
+        idleDeadlineMs: server.keepAliveTimeout + server.keepAliveTimeoutBuffer,
+      })
+    );
     const chunks: Buffer[] = [];
     try {
       for await (const chunk of request) {
@@ -396,6 +420,30 @@ export const startMockGt = async (options: MockOptions): Promise<MockGtServer> =
         response.destroy(failure instanceof Error ? failure : new Error('Mock request failed'));
       }
     }
+  });
+  server.on('connection', (socket) => {
+    const id = ++connectionId;
+    connections.set(socket, id);
+    options.onConnectionEvent?.({
+      event: 'connection',
+      at: new Date().toISOString(),
+      connectionId: id,
+    });
+    socket.on('timeout', () =>
+      options.onConnectionEvent?.({
+        event: 'timeout',
+        at: new Date().toISOString(),
+        connectionId: id,
+      })
+    );
+    socket.on('close', (hadError) =>
+      options.onConnectionEvent?.({
+        event: 'close',
+        at: new Date().toISOString(),
+        connectionId: id,
+        hadError,
+      })
+    );
   });
   server.listen(options.port ?? 0, '127.0.0.1');
   await once(server, 'listening');
