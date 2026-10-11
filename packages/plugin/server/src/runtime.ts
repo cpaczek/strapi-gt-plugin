@@ -138,7 +138,7 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
       components,
       source,
       target: targetSnapshot,
-      checkpoints: state.checkpoints,
+      checkpoints: target === null ? {} : state.checkpoints,
       rules: configured.fields,
       force: job.force,
       mediaMetadata: configured.mediaMetadata,
@@ -243,6 +243,9 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
         }
       }
       await authorize(job, prepared, prepared.input.source, target, applied.patch);
+      if (target === null)
+        await repository.deleteState(job.contentType, job.documentId, job.targetLocale);
+      const retainedMedia = target === null ? [] : previous.media;
       if (Object.keys(applied.patch).length)
         await documents.write(
           prepared.input.schema,
@@ -263,7 +266,9 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
         return fail('Create the target content before translating media metadata');
       const state = {
         checkpoints: applied.checkpoints,
-        media: updated ? appliedMedia(applied, updated, previous, target) : previous.media,
+        media: updated
+          ? appliedMedia(applied, updated, { ...previous, media: retainedMedia }, target)
+          : retainedMedia,
         appliedJob: job.id,
       };
       await repository.saveState(job.contentType, job.documentId, job.targetLocale, 'draft', state);
