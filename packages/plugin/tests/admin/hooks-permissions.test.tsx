@@ -58,10 +58,10 @@ beforeEach(() => {
   });
 });
 describe('bulk action eligibility from the loaded native layout', () => {
-  const selection = {
+  const selection: Parameters<typeof TranslateBulkAction>[0] = {
     model: context.model,
     collectionType: 'collection-types',
-    documents: [{ documentId: 'one' }],
+    documents: [{ id: 1, documentId: 'one' }],
   };
   it('exposes the eligible action before GT option metadata resolves', () => {
     host.get.mockReturnValue(new Promise(() => {}));
@@ -114,9 +114,9 @@ describe('bulk action eligibility from the loaded native layout', () => {
   });
   it('updates eligibility when selecting a different model', () => {
     const { result, rerender } = renderHook(
-      ({ model }) => TranslateBulkAction({ ...selection, model }),
+      ({ model }: { model: string }) => TranslateBulkAction({ ...selection, model }),
       {
-        initialProps: { model: context.model },
+        initialProps: { model: selection.model },
         wrapper,
       }
     );

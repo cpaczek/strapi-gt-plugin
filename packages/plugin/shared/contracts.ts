@@ -128,6 +128,7 @@ export interface AppliedTranslation {
   patch: JsonObject;
   checkpoints: Record<string, FieldCheckpoint>;
   media: MediaTranslation[];
+  readDependencies: { document: 'source' | 'target'; path: FieldPath }[];
 }
 export interface TranslationEngine {
   prepare(input: PrepareTranslationInput): PreparedTranslation;

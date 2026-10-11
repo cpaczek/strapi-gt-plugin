@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { Core } from '@strapi/strapi';
 import plugin from '../../server/src';
 import { DEFAULT_SETTINGS } from '../../shared/constants';
-import type { PluginSettings } from '../../shared/contracts';
+import type { JsonObject, PluginSettings } from '../../shared/contracts';
 import { startMockGt } from '../../../../tests/apps/acceptance/src/mock-gt';
 import { createFixtureEvidence } from './fixture-evidence';
 import type { PluginRuntime } from '../../server/src/runtime';
@@ -29,6 +29,9 @@ const sourceRecord = record.extend({ documentId: z.string(), locale: z.string() 
 const fixtureSymbol = Symbol.for('general-translation.real-server-test');
 const isProcessListener = (value: unknown): value is (...arguments_: unknown[]) => void =>
   typeof value === 'function';
+
+// These fixtures load their content schemas at runtime, outside Strapi's generated registry.
+export const fixtureDocumentData = (data: JsonObject): JsonObject => data;
 
 export const startStrapiFixture = async (
   options: { uid?: boolean; gtBaseUrl?: string; locales?: string[] } = {}
@@ -142,6 +145,7 @@ export const startStrapiFixture = async (
         title: { type: 'string' },
         count: { type: 'integer' },
         image: { type: 'media', multiple: false },
+        ...(options.uid ? { slug: { type: 'uid', targetField: 'title' } } : {}),
       },
     },
     true

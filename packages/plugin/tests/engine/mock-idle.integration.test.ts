@@ -13,7 +13,7 @@ const request = {
   sourceLocale: 'en',
   targetLocale: 'fr',
   segments: [
-    { id: 'idle-probe', text: 'A fixture message', kind: 'string' as const, path: ['title'] },
+    { id: 'idle-probe', text: 'A fixture message', kind: 'text' as const, path: ['title'] },
   ],
 };
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { transitionJob, shouldUseFiles } from '../../server/src/jobs';
+import type { StoredJob } from '../../server/src/validation';
 import { DEFAULT_SETTINGS } from '../../shared/constants';
 import type { GtClient, PreparedTranslation } from '../../shared/contracts';
 
@@ -33,33 +34,32 @@ const client: GtClient = {
   poll: async () => ({ status: 'ready' }),
   download: async () => ({ title: 'Bonjour' }),
 };
-const job = () =>
-  ({
-    id: 1,
-    key: 'key',
-    contentType: 'api::article.article',
-    documentId: 'doc',
-    sourceLocale: 'en',
-    targetLocale: 'fr',
-    actorId: 1,
-    force: false,
-    status: 'running',
-    stage: 'prepare',
-    attempts: 0,
-    nextRunAt: '2026-10-10T00:00:00.000Z',
-    leaseOwner: 'lease',
-    leaseUntil: '2026-10-10T00:02:00.000Z',
-    prepared: null,
-    file: null,
-    remoteJobIds: [],
-    translations: {},
-    error: null,
-    createdAt: '2026-10-10T00:00:00.000Z',
-    updatedAt: '2026-10-10T00:00:00.000Z',
-    settings: { ...DEFAULT_SETTINGS, projectId: 'project' },
-    sourceStatus: 'draft',
-    permission: 'translate',
-  }) as const;
+const job = (): StoredJob => ({
+  id: 1,
+  key: 'key',
+  contentType: 'api::article.article',
+  documentId: 'doc',
+  sourceLocale: 'en',
+  targetLocale: 'fr',
+  actorId: 1,
+  force: false,
+  status: 'running',
+  stage: 'prepare',
+  attempts: 0,
+  nextRunAt: '2026-10-10T00:00:00.000Z',
+  leaseOwner: 'lease',
+  leaseUntil: '2026-10-10T00:02:00.000Z',
+  prepared: null,
+  file: null,
+  remoteJobIds: [],
+  translations: {},
+  error: null,
+  createdAt: '2026-10-10T00:00:00.000Z',
+  updatedAt: '2026-10-10T00:00:00.000Z',
+  settings: { ...DEFAULT_SETTINGS, projectId: 'project' },
+  sourceStatus: 'draft',
+  permission: 'translate',
+});
 
 describe('durable translation stages', () => {
   it('prepares without making a remote request', async () => {

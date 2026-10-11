@@ -38,7 +38,7 @@
     "watch": "strapi-plugin watch",
     "test": "node server/test.mjs",
     "test:live": "node server/test.mjs --config vitest.live.config.mts",
-    "typecheck": "tsc -p server/tsconfig.json && tsc -p admin/tsconfig.json && tsc -p tsconfig.live.json",
+    "typecheck": "tsc -p server/tsconfig.json && tsc -p admin/tsconfig.json && tsc -p tsconfig.live.json && tsc -p tsconfig.tests.json",
     "lint": "oxlint server admin shared tests scripts",
     "format": "oxfmt --check server admin shared tests",
     "size": "node scripts/check-size.mjs"

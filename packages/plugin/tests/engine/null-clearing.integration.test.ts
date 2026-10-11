@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { z } from 'zod';
 import { hashValue } from '../../server/src/engine';
 import { PERMISSIONS, REQUEST_TIMEOUT_MS } from '../../shared/constants';
-import { startStrapiFixture } from '../server/strapi-fixture';
+import { fixtureDocumentData, startStrapiFixture } from '../server/strapi-fixture';
 
 vi.setConfig({ testTimeout: REQUEST_TIMEOUT_MS * 2, hookTimeout: REQUEST_TIMEOUT_MS * 4 });
 let fixture: Awaited<ReturnType<typeof startStrapiFixture>> | undefined;
@@ -53,7 +53,7 @@ const source = async () => {
   await strapi.documents('api::article.article').update({
     documentId: created.documentId,
     locale: 'fr',
-    data: { title: 'Human locale title', summary: null },
+    data: fixtureDocumentData({ title: 'Human locale title', summary: null }),
   });
   return created.documentId;
 };
@@ -86,7 +86,7 @@ const clearSource = async (documentId: string) => {
   const { strapi } = app();
   await strapi
     .documents('api::article.article')
-    .update({ documentId, locale: 'en', data: { summary: null } });
+    .update({ documentId, locale: 'en', data: fixtureDocumentData({ summary: null }) });
   expect(
     await strapi.documents('api::article.article').findOne({ documentId, locale: 'en' })
   ).toMatchObject({ summary: null });
@@ -119,7 +119,11 @@ describe('real Document Service null clearing', () => {
     await translate(documentId);
     await app()
       .strapi.documents('api::article.article')
-      .update({ documentId, locale: 'fr', data: { summary: 'Human edited summary' } });
+      .update({
+        documentId,
+        locale: 'fr',
+        data: fixtureDocumentData({ summary: 'Human edited summary' }),
+      });
     await clearSource(documentId);
     const count = app().mock.requests.length;
     expect(await translate(documentId)).toMatchObject({
@@ -135,7 +139,11 @@ describe('real Document Service null clearing', () => {
     const documentId = await source();
     await app()
       .strapi.documents('api::article.article')
-      .update({ documentId, locale: 'fr', data: { summary: 'Before any translation' } });
+      .update({
+        documentId,
+        locale: 'fr',
+        data: fixtureDocumentData({ summary: 'Before any translation' }),
+      });
     await clearSource(documentId);
     const count = app().mock.requests.length;
     expect(await translate(documentId)).toMatchObject({
@@ -167,9 +175,11 @@ it('clears a native nested optional string without changing component identity o
       },
     },
   });
-  await strapi
-    .documents('api::article.article')
-    .update({ documentId, locale: 'en', data: { card: { title: 'Nested source', count: 7 } } });
+  await strapi.documents('api::article.article').update({
+    documentId,
+    locale: 'en',
+    data: fixtureDocumentData({ card: { title: 'Nested source', count: 7 } }),
+  });
   expect(await translate(documentId)).toMatchObject({ status: 'succeeded' });
   const cardRecord = z.object({
     card: z.object({ id: z.number(), title: z.string().nullable(), count: z.number() }),
@@ -180,12 +190,16 @@ it('clears a native nested optional string without changing component identity o
       .findOne({ documentId, locale, status: 'draft', populate: { card: true } });
   const sourceCard = cardRecord.parse(await read('en')).card;
   const targetCard = cardRecord.parse(await read('fr')).card;
-  await strapi
-    .documents('api::article.article')
-    .update({ documentId, locale: 'fr', data: { card: { ...targetCard, count: 999 } } });
-  await strapi
-    .documents('api::article.article')
-    .update({ documentId, locale: 'en', data: { card: { ...sourceCard, title: null } } });
+  await strapi.documents('api::article.article').update({
+    documentId,
+    locale: 'fr',
+    data: fixtureDocumentData({ card: { ...targetCard, count: 999 } }),
+  });
+  await strapi.documents('api::article.article').update({
+    documentId,
+    locale: 'en',
+    data: fixtureDocumentData({ card: { ...sourceCard, title: null } }),
+  });
   const count = app().mock.requests.length;
   expect(await translate(documentId)).toMatchObject({ status: 'succeeded' });
   expect(cardRecord.parse(await read('fr')).card).toEqual({
@@ -203,7 +217,7 @@ it('suppresses a stale published caption after raw metadata becomes null while r
   for (const locale of ['en', 'fr'])
     await strapi
       .documents('api::article.article')
-      .update({ documentId, locale, data: { image: assetId } });
+      .update({ documentId, locale, data: fixtureDocumentData({ image: assetId }) });
   expect(await translate(documentId)).toMatchObject({ status: 'succeeded' });
   await runtime.mediaDocument('api::article.article', documentId, 'fr', 'draft', actorId, {
     contentType: 'api::article.article',

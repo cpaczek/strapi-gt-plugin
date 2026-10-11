@@ -53,7 +53,7 @@ export const persistenceFixture = () => {
     },
     async create(parameters) {
       if (!objectRecord(parameters.data)) throw new Error('Missing fixture record');
-      const row = { ...structuredClone(parameters.data), id: ++sequence };
+      const row: Record<string, unknown> = { ...structuredClone(parameters.data), id: ++sequence };
       if (uid.endsWith('.lease') && records(uid).some((existing) => existing.key === row.key))
         throw new Error('Duplicate fixture lease');
       records(uid).push(row);
