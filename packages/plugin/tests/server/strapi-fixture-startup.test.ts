@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { access } from 'node:fs/promises';
-import { createConnection } from 'node:net';
+import { createConnection, createServer, type Server } from 'node:net';
+import { once } from 'node:events';
 import type { MockGtServer } from '../../../../tests/apps/acceptance/src/mock-gt';
 import type { createFixtureEvidence } from './fixture-evidence';
+import { cleanupTestResources } from '../../../../scripts/testbed/cleanup-resources.mjs';
 import { startStrapiFixture } from './strapi-fixture';
 
 const state = vi.hoisted(() => {
   const value: {
     failPath?: string;
+    failSymlink?: boolean;
     failure?: Error;
     mockCloseFailure?: Error;
     evidenceCloseFailure?: Error;
@@ -35,6 +38,10 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       if (typeof directory === 'string' && directory.includes('/server-integration/app-'))
         state.directories.push(directory);
       return directory;
+    },
+    symlink: async (...args: Parameters<typeof original.symlink>) => {
+      if (state.failSymlink) throw state.failure;
+      return original.symlink(...args);
     },
     writeFile: async (...args: Parameters<typeof original.writeFile>) => {
       if (state.failPath && String(args[0]).endsWith(state.failPath)) {
@@ -87,6 +94,7 @@ const originalGlobals = new Map<PropertyKey, PropertyDescriptor | undefined>();
 const event = Symbol('unrelated-startup-listener');
 const listener = () => {};
 const unrelatedListener = () => {};
+const sentinel: { server?: Server; url?: string } = {};
 const listening = (url: string): Promise<boolean> =>
   new Promise((resolve, reject) => {
     const socket = createConnection({ host: '127.0.0.1', port: Number(new URL(url).port) });
@@ -99,7 +107,16 @@ const listening = (url: string): Promise<boolean> =>
       else reject(failure);
     });
   });
-beforeEach(() => {
+beforeEach(async () => {
+  const server = createServer((socket) => socket.end());
+  sentinel.server = server;
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  const address = server.address();
+  if (!address || typeof address === 'string')
+    throw new Error('The unrelated listener did not start');
+  sentinel.url = `http://127.0.0.1:${address.port}`;
+  state.failSymlink = false;
   state.failPath = undefined;
   state.failure = undefined;
   state.mockCloseFailure = undefined;
@@ -118,25 +135,50 @@ beforeEach(() => {
 });
 afterEach(async () => {
   const fs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-  for (const mock of state.mocks) if (!state.closedMocks.has(mock.url)) await mock.close();
-  for (const evidence of state.evidence)
-    if (!state.closedEvidence.has(evidence.path)) await evidence.close();
-  for (const directory of state.directories)
-    await fs.rm(directory, { recursive: true, force: true });
-  state.mocks.length = 0;
-  state.evidence.length = 0;
-  state.directories.length = 0;
-  state.closedMocks.clear();
-  state.closedEvidence.clear();
-  globalThis.fetch = originalFetch;
-  for (const [key, descriptor] of originalGlobals) {
-    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-    else Reflect.deleteProperty(globalThis, key);
-  }
-  process.removeAllListeners(event);
-  vi.unstubAllEnvs();
+  const server = sentinel.server;
+  await cleanupTestResources([
+    ...state.mocks
+      .filter((mock) => !state.closedMocks.has(mock.url))
+      .map((mock) => () => mock.close()),
+    ...state.evidence
+      .filter((evidence) => !state.closedEvidence.has(evidence.path))
+      .map((evidence) => () => evidence.close()),
+    ...state.directories.map(
+      (directory) => () => fs.rm(directory, { recursive: true, force: true })
+    ),
+    () => {
+      globalThis.fetch = originalFetch;
+    },
+    ...[...originalGlobals].map(([key, descriptor]) => () => {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }),
+    () => {
+      process.removeAllListeners(event);
+    },
+    () => {
+      vi.unstubAllEnvs();
+    },
+    async () => {
+      if (server)
+        await new Promise<void>((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve()))
+        );
+    },
+    () => {
+      state.mocks.length = 0;
+      state.evidence.length = 0;
+      state.directories.length = 0;
+      state.closedMocks.clear();
+      state.closedEvidence.clear();
+      delete sentinel.server;
+      delete sentinel.url;
+    },
+  ]);
 });
 const assertRestored = async () => {
+  if (!sentinel.url) throw new Error('The unrelated listener was not recorded');
+  expect(await listening(sentinel.url)).toBe(true);
   expect(process.env.GT_API_KEY === 'prior-test-key').toBe(true);
   expect(process.env.STRAPI_TELEMETRY_DISABLED === 'prior-test-telemetry').toBe(true);
   expect(Object.getOwnPropertyDescriptor(globalThis, fixtureSymbol)).toEqual({
@@ -191,9 +233,32 @@ describe('Strapi fixture acquisition failures', () => {
     if (!(failure instanceof AggregateError)) throw new Error('Startup failure was not retained');
     expect(failure.errors[0]).toBe(state.failure);
     expect(failure.cause).toBe(state.failure);
+    const cleanupFailure: unknown = failure.errors[1];
+    expect(cleanupFailure).toBeInstanceOf(AggregateError);
+    if (!(cleanupFailure instanceof AggregateError))
+      throw new Error('Cleanup failures were not retained');
+    expect(cleanupFailure.errors).toEqual([state.mockCloseFailure, state.evidenceCloseFailure]);
     await assertRestored();
     expect(process.rawListeners(event)).toContain(unrelatedListener);
   });
+  it('restores state and listener ownership after a symlink failure', async () => {
+    state.failSymlink = true;
+    state.failure = new Error('Injected fixture symlink failure');
+    await expect(startStrapiFixture()).rejects.toBe(state.failure);
+    await assertRestored();
+  });
+
+  it('can initialize another real fixture in the same worker after failed startup', async () => {
+    state.failPath = '/package.json';
+    state.failure = new Error('Injected first startup failure');
+    await expect(startStrapiFixture()).rejects.toBe(state.failure);
+    await assertRestored();
+    state.failPath = undefined;
+    const fixture = await startStrapiFixture();
+    await fixture.close();
+    await assertRestored();
+  }, 30000);
+
   it('restores prior global descriptors after a successful real fixture', async () => {
     const fixture = await startStrapiFixture();
     await fixture.close();

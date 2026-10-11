@@ -4,6 +4,7 @@ import { realpath, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { runSafeCommand, sanitizeCommandOutput } from './safe-command.mjs';
+import { cleanupTestResources } from './cleanup-resources.mjs';
 import { stopOwnedProcessGroup } from './owned-process.mjs';
 import { setTimeout as pollDelay } from 'node:timers/promises';
 
@@ -13,10 +14,13 @@ const pluginPath = await realpath(
   require.resolve('strapi-plugin-general-translation/strapi-server')
 );
 assert.ok(!pluginPath.includes('/packages/plugin/'), 'Fresh install resolved the workspace source');
-const strapi = await createStrapi(await compileStrapi()).load();
+const strapi = createStrapi(await compileStrapi());
+/** @type {unknown[]} */
+const initializationFailures = [];
 const translated = { documentId: '', title: '' };
 const accountFile = resolve('browser-account.json');
 try {
+  await strapi.load();
   assert.ok(strapi.plugin('general-translation'));
   const articles = await strapi
     .documents('api::article.article')
@@ -119,9 +123,10 @@ try {
   process.stdout.write(
     'Packed plugin translated a French draft with editor attribution and then published it.\n'
   );
-} finally {
-  await strapi.destroy();
+} catch (failure) {
+  initializationFailures.push(failure);
 }
+await cleanupTestResources([() => strapi.destroy()], initializationFailures);
 
 const { spawn } = await import('node:child_process');
 const { once } = await import('node:events');
