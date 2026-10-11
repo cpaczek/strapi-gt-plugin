@@ -8,11 +8,11 @@ Editors translate one entry or a selection, review per-locale jobs, and preserve
 ### Demo
 
 Write an article in Strapi, translate it into French and Arabic, publish the versions,
-and switch languages on the Next.js blog. This 79-second silent demo also shows
+and switch languages on the Next.js blog. This two-minute silent demo also shows
 field context, slug settings, human-edit protection, localized media, bulk translation,
-and automatic triggers. Typing is sped up and waiting time is shortened.
+and automatic triggers. Cursor movement and scrolling are shown continuously.
 
-https://github.com/user-attachments/assets/1278398e-ea26-4714-9523-5d95ba0cdb1c
+https://github.com/user-attachments/assets/feaac374-52a4-484c-b3e1-cc49c6124581
 
 ## Screenshots
 
