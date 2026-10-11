@@ -522,7 +522,7 @@ test('a preexisting human target is protected before its first GT request', asyn
         await expect(cells.first()).toBeFocused();
         await page.keyboard.press('End');
         await expect(cells.last()).toBeFocused();
-        await expect(cells.last()).toBeInViewport({ ratio: 1 });
+        await expect(cells.last().getByText(/^General Translation:/)).toBeInViewport({ ratio: 1 });
         await page.keyboard.press('Home');
         await expect(cells.first()).toBeFocused();
         await page.setViewportSize({ width: 1280, height: 720 });
@@ -635,6 +635,118 @@ test('native optional text clearing preserves manual targets until force', async
     }),
   });
   await assertAccessible(page, 'section[aria-label="General Translation controls"]');
+});
+
+test('deleting only the French locale allows ordinary draft recreation and publication', async ({
+  page,
+  editor,
+  context,
+}) => {
+  await selectTranslationFields(page, ['title', 'slug', 'summary']);
+  const media = page.getByRole('checkbox', {
+    name: 'Translate media alt text and captions for api::article.article',
+    exact: true,
+  });
+  await media.uncheck();
+  await expect(media).not.toBeChecked();
+  await expect(page.getByRole('combobox', { name: 'UID policy for slug', exact: true })).toHaveText(
+    'Generate from translated field'
+  );
+  await expect(
+    page.getByRole('textbox', { name: 'Source field for slug', exact: true })
+  ).toHaveValue('title');
+  await saveSettings(page);
+  const source = await editor.createSource('Deleted locale recreation');
+  const translatedTitle = `[fr] ${source.title}`;
+  const publish = async (locale: string) => {
+    await openDocument(page, { documentId: source.documentId, locale });
+    const response = page.waitForResponse(
+      (result) =>
+        new URL(result.url()).pathname === `${collection}/${source.documentId}/actions/publish` &&
+        result.request().method() === 'POST'
+    );
+    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    expect((await response).status()).toBe(200);
+  };
+  await publish('en');
+  const first = await queueFrench(page);
+  expect(
+    (await awaitTerminalJobs(editor.api, source.documentId, first)).map((job) => job.status)
+  ).toEqual(['succeeded']);
+  await publish('fr');
+  const reader = await context.newPage();
+  try {
+    await reader.goto(`/fr/articles/${source.documentId}`);
+    await expect(reader.getByRole('heading', { name: translatedTitle, exact: true })).toBeVisible();
+    await expect(
+      reader.getByText('[fr] A field note for translation acceptance.', { exact: true })
+    ).toBeVisible();
+    await page.bringToFront();
+    await page.getByRole('button', { name: 'More actions', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Delete entry (French (fr))', exact: true }).click();
+    const confirmation = page.getByRole('alertdialog').filter({
+      has: page.getByRole('heading', { name: 'Confirmation', exact: true }),
+    });
+    await expect(
+      confirmation.getByText('Are you sure you want to delete this locale?', { exact: true })
+    ).toBeVisible();
+    const deleted = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === `${collection}/${source.documentId}` &&
+        url.searchParams.get('locale') === 'fr' &&
+        response.request().method() === 'DELETE'
+      );
+    });
+    await confirmation.getByRole('button', { name: 'Confirm', exact: true }).click();
+    expect((await deleted).status()).toBe(200);
+    await expect(confirmation).not.toBeVisible();
+    const retainedSource = await editor.api.get(`${collection}/${source.documentId}?locale=en`);
+    expect(retainedSource.status()).toBe(200);
+    expect(documentResponse.parse(await retainedSource.json()).data).toEqual(source);
+    await reader.reload();
+    await expect(
+      reader.getByRole('heading', { name: 'This story is not available in this language.' })
+    ).toBeVisible();
+    await openDocument(page, source);
+    const recreated = await queueFrench(page);
+    expect(recreated.every((id) => !first.includes(id))).toBe(true);
+    expect(
+      (await awaitTerminalJobs(editor.api, source.documentId, recreated)).map((job) => ({
+        status: job.status,
+        code: job.error?.code,
+      }))
+    ).toEqual([{ status: 'succeeded', code: undefined }]);
+    const draft = await editor.api.get(`${collection}/${source.documentId}?locale=fr`);
+    expect(draft.status()).toBe(200);
+    expect(
+      z
+        .object({
+          data: z.object({ documentId: z.string(), title: z.string(), publishedAt: z.null() }),
+        })
+        .parse(await draft.json()).data
+    ).toEqual({
+      documentId: source.documentId,
+      title: translatedTitle,
+      publishedAt: null,
+    });
+    await reader.reload();
+    await expect(
+      reader.getByRole('heading', { name: 'This story is not available in this language.' })
+    ).toBeVisible();
+    await publish('fr');
+    await reader.reload();
+    await expect(reader).toHaveURL(new RegExp(`/fr/articles/${source.documentId}$`));
+    await expect(reader.getByRole('heading', { name: translatedTitle, exact: true })).toBeVisible();
+    await assertAccessible(reader);
+    await assertAccessible(page, 'section[aria-label="General Translation controls"]');
+    await reader.screenshot({
+      path: '../../../.work/screenshots/recreated-published-fr.png',
+      fullPage: true,
+    });
+  } finally {
+    await reader.close();
+  }
 });
 
 test('human target edits survive normal translation and force requires consent', async ({
