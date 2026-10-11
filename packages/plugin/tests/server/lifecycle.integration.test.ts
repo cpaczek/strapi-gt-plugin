@@ -454,3 +454,25 @@ it('retains a manual media overlay on an existing locale while media is temporar
     status: 'manual',
   });
 });
+
+it('restores every published locale checkpoint when all drafts are discarded', async () => {
+  const id = await source();
+  await translated(id, 'fr');
+  await translated(id, 'ar');
+  await app().strapi.documents(article).publish({ documentId: id, locale: '*' });
+  const french = await state(id, 'fr', 'published');
+  const arabic = await state(id, 'ar', 'published');
+  await revise(id);
+  await translated(id, 'fr');
+  await translated(id, 'ar');
+  await app().strapi.documents(article).discardDraft({ documentId: id, locale: '*' });
+  expect(await state(id, 'fr')).toEqual(french);
+  expect(await state(id, 'ar')).toEqual(arabic);
+  expect(await read(id, 'fr')).toMatchObject({ summary: '[fr] First source' });
+  expect(await read(id, 'ar')).toMatchObject({ summary: '[ar] First source' });
+  await revise(id, 'Next source');
+  await translated(id, 'fr');
+  await translated(id, 'ar');
+  expect(await read(id, 'fr')).toMatchObject({ summary: '[fr] Next source' });
+  expect(await read(id, 'ar')).toMatchObject({ summary: '[ar] Next source' });
+});
