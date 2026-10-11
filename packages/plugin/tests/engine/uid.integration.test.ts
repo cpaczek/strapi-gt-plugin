@@ -1,8 +1,10 @@
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import type { Socket } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { startStrapiFixture } from '../server/strapi-fixture';
+import { createGtClient } from '../../server/src/engine';
 import { REQUEST_TIMEOUT_MS } from '../../shared/constants';
 
 vi.setConfig({ testTimeout: REQUEST_TIMEOUT_MS * 2, hookTimeout: REQUEST_TIMEOUT_MS * 4 });
@@ -18,6 +20,9 @@ const runtimeRequest = z.object({
   targetLocale: z.string(),
 });
 const receipts: string[][] = [];
+const connections = new WeakMap<Socket, number>();
+const responses: { connectionId: number; idleDeadlineMs: number }[] = [];
+let connectionSequence = 0;
 const provider = createServer(async (incoming, outgoing) => {
   const chunks: Buffer[] = [];
   for await (const chunk of incoming) {
@@ -38,8 +43,19 @@ const provider = createServer(async (incoming, outgoing) => {
       },
     ])
   );
+  const connectionId = connections.get(incoming.socket);
+  if (connectionId === undefined) throw new Error('The UID provider connection was not observed');
+  outgoing.once('finish', () =>
+    responses.push({
+      connectionId,
+      idleDeadlineMs: provider.keepAliveTimeout + (provider.keepAliveTimeoutBuffer ?? 0),
+    })
+  );
   outgoing.writeHead(200, { 'content-type': 'application/json' });
   outgoing.end(JSON.stringify(reply));
+});
+provider.on('connection', (socket) => {
+  connections.set(socket, ++connectionSequence);
 });
 let fixture: Awaited<ReturnType<typeof startStrapiFixture>> | undefined;
 beforeAll(async () => {
@@ -180,3 +196,47 @@ describe('native Strapi publication of translated UIDs', () => {
     ).rejects.toThrow(/unique/i);
   });
 });
+
+it(
+  'keeps the UID provider usable after two warmups and an observed idle deadline',
+  async () => {
+    const address = provider.address();
+    if (!address || typeof address === 'string')
+      throw new Error('Expected the actual UID provider listener');
+    const client = createGtClient({
+      apiKey: 'uid-fixture-idle-control',
+      projectId: 'editorial',
+      baseUrl: `http://127.0.0.1:${address.port}`,
+    });
+    const request = {
+      sourceLocale: 'en',
+      targetLocale: 'ar',
+      segments: [
+        { id: 'uid-idle-probe', path: ['title'], text: 'UID fixture title', kind: 'text' as const },
+      ],
+    };
+    const start = responses.length;
+    await expect(client.translate(request)).resolves.toEqual({
+      'uid-idle-probe': 'UID fixture title',
+    });
+    await expect(client.translate(request)).resolves.toEqual({
+      'uid-idle-probe': 'UID fixture title',
+    });
+    const lastResponse = responses.at(-1);
+    if (!lastResponse?.idleDeadlineMs)
+      throw new Error('The UID provider did not expose its idle deadline');
+    // Two responses fill the native fetch pool before synchronous application work delays idle timers.
+    const deadline = performance.now() + lastResponse.idleDeadlineMs + 100;
+    const document = JSON.stringify(
+      Array.from({ length: 100 }, (_, index) => ({ index, title: 'UID fixture document' }))
+    );
+    while (performance.now() < deadline) JSON.parse(document);
+    await expect(client.translate(request)).resolves.toEqual({
+      'uid-idle-probe': 'UID fixture title',
+    });
+    const observed = responses.slice(start);
+    expect(observed).toHaveLength(3);
+    expect(new Set(observed.map((response) => response.connectionId)).size).toBe(3);
+  },
+  REQUEST_TIMEOUT_MS
+);
