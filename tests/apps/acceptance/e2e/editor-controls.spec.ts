@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { readMockControls } from '../src/mock-controls';
 import { createEditorApi } from '../src/editor-api';
 import { messages } from '../../../../packages/plugin/shared/messages';
+import { ACCEPTANCE_JOB_TIMEOUT_MS } from '../../../../packages/plugin/shared/constants';
 import { jobsSchema, enqueueSchema } from '../../../../packages/plugin/admin/src/api';
 import { assertAccessible } from './accessibility';
 import {
@@ -227,7 +228,7 @@ const waitForJobs = async (api: APIRequestContext, documentIds: string[], jobIds
           jobs.every((job) => ['succeeded', 'conflict'].includes(job.status))
         );
       },
-      { timeout: 60_000 }
+      { timeout: ACCEPTANCE_JOB_TIMEOUT_MS }
     )
     .toBe(true);
 };
@@ -833,7 +834,7 @@ const awaitTerminalJobs = async (api: APIRequestContext, documentId: string, ids
           jobs.every((job) => ['succeeded', 'failed', 'conflict'].includes(job.status))
         );
       },
-      { timeout: 60_000 }
+      { timeout: ACCEPTANCE_JOB_TIMEOUT_MS }
     )
     .toBe(true);
   return (await readDocumentJobs(api, documentId)).filter((job) => ids.includes(job.id));
