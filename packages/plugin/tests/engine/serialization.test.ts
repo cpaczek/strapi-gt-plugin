@@ -1,3 +1,4 @@
+import type { JsonValue } from '../../shared/contracts';
 import { describe, expect, it } from 'vitest';
 import { hashValue, translationEngine } from '../../server/src/engine';
 import { identity, prepareInput } from './fixtures';
@@ -26,7 +27,7 @@ describe('schema-aware translation', () => {
     expect(apply(prepared, identity(prepared.segments)).patch.body).toBe(body);
   });
   it('translates Blocks text without altering marks, links, or nodes', () => {
-    const blocks = [
+    const blocks: JsonValue[] = [
       {
         type: 'paragraph',
         children: [

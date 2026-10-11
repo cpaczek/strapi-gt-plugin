@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JOB_LEASE_MS, WORKER_CONCURRENCY, WORKER_POLL_MS } from '../../shared/constants';
 import type { GtClient, PreparedTranslation } from '../../shared/contracts';
 import { createWorker, classifyFailure } from '../../server/src/worker';
+import type { StoredJob } from '../../server/src/validation';
 import { jobFixture } from './persistence-fixture';
 
 const prepared: PreparedTranslation = {
@@ -38,7 +39,7 @@ const setup = () => {
     leaseOwner: 'owner',
   });
   const repository = {
-    claim: vi.fn(async () => job),
+    claim: vi.fn(async (): Promise<StoredJob | null> => job),
     renew: vi.fn(async () => true),
     completeStage: vi.fn(async () => true),
   };

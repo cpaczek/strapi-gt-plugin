@@ -58,7 +58,7 @@ describe('current actor authority', () => {
     const permission = {
       engine: {
         generateUserAbility: async () => ({
-          can: (action: string) => action === PERMISSIONS.translate,
+          can: (action: string): boolean => action === PERMISSIONS.translate,
         }),
       },
     };

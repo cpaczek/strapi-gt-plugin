@@ -98,7 +98,7 @@ describe('adversarial serialization', () => {
     ).toThrow();
   });
   it('keeps Blocks code and image payloads outside translation requests', () => {
-    const blocks = [
+    const blocks: JsonValue[] = [
       { type: 'code', children: [{ type: 'text', text: 'const code = 1;' }] },
       {
         type: 'image',
@@ -368,7 +368,7 @@ describe('component references and incomplete populated values', () => {
         },
       },
     };
-    const source = {
+    const source: JsonObject = {
       card: {
         id: 3,
         heading: 'Hello',
@@ -412,7 +412,12 @@ describe('component references and incomplete populated values', () => {
     ]);
   });
   it('ignores media without identities and allows raw shared metadata with no overlay history', () => {
-    const photo = [{ id: 'asset', caption: 'Shared' }, { caption: 'No identity' }, 5, null];
+    const photo: JsonValue[] = [
+      { id: 'asset', caption: 'Shared' },
+      { caption: 'No identity' },
+      5,
+      null,
+    ];
     const prepared = prepare(prepareInput({ photo }, { target: { photo }, mediaMetadata: true }));
     expect(prepared.segments.map((entry) => entry.text)).toEqual(['Shared']);
     expect(apply(prepared, identity(prepared.segments)).media[0]?.assetId).toBe('asset');

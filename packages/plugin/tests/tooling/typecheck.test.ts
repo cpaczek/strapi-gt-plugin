@@ -47,6 +47,8 @@ describe('plugin test compiler coverage', () => {
   it('retains strict checking for every configured project', () => {
     expect(configurations().length).toBeGreaterThan(0);
     for (const { compilerOptions } of configurations()) {
+      expect(compilerOptions.noImplicitAny ?? compilerOptions.strict).toBe(true);
+      expect(compilerOptions.strictNullChecks ?? compilerOptions.strict).toBe(true);
       expect(compilerOptions).toMatchObject({
         strict: true,
         noUncheckedIndexedAccess: true,
@@ -59,7 +61,14 @@ describe('plugin test compiler coverage', () => {
   });
 
   it('rejects invalid segment kinds and nullable mocks while accepting their valid controls', () => {
-    const config = configurations()[0];
+    const config =
+      configurations().find((candidate) =>
+        candidate.files.some(
+          (path) =>
+            resolve(root, dirname(candidate.path), path) ===
+            resolve(import.meta.dirname, 'typecheck.test.ts')
+        )
+      ) ?? configurations()[0];
     if (!config) throw new Error('Expected compiler options from the package typecheck command');
     const evidenceRoot = resolve(root, '../../.work/typecheck');
     mkdirSync(evidenceRoot, { recursive: true });

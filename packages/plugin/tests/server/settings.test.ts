@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS } from '../../shared/constants';
+import type { SettingsMetadata } from '../../server/src/settings';
 import { validateSettings, publicSettings } from '../../server/src/settings';
 
-const metadata = {
+const metadata: SettingsMetadata = {
   locales: [
     { code: 'en', name: 'English' },
     { code: 'fr', name: 'French' },
@@ -83,7 +84,7 @@ it('uses the schema UID source field when regeneration has no explicit override'
       },
     },
   };
-  const available = {
+  const available: SettingsMetadata = {
     ...metadata,
     contentTypes: [
       {
@@ -98,7 +99,7 @@ it('uses the schema UID source field when regeneration has no explicit override'
   expect(() => validateSettings(configured, available)).not.toThrow();
 });
 it('rejects a nested field hidden by a private component', () => {
-  const available = {
+  const available: SettingsMetadata = {
     ...metadata,
     contentTypes: [
       {

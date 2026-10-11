@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { startStrapiFixture } from './strapi-fixture';
+import { fixtureDocumentData, startStrapiFixture } from './strapi-fixture';
 import { REQUEST_TIMEOUT_MS } from '../../shared/constants';
 
 vi.setConfig({ testTimeout: REQUEST_TIMEOUT_MS * 2, hookTimeout: REQUEST_TIMEOUT_MS * 4 });
@@ -194,7 +194,11 @@ describe('real runtime conflict and permission controls', () => {
       .update({
         documentId: source.documentId,
         locale: 'fr',
-        data: { title: 'Human title', createdBy: app().actorId, updatedBy: app().actorId },
+        data: fixtureDocumentData({
+          title: 'Human title',
+          createdBy: app().actorId,
+          updatedBy: app().actorId,
+        }),
       });
     const job = await finish(await queue(source.documentId));
     expect(job.status, JSON.stringify(job.error)).toBe('succeeded');
@@ -207,7 +211,11 @@ describe('real runtime conflict and permission controls', () => {
     const source = await freshSource();
     await app()
       .strapi.documents('api::article.article')
-      .update({ documentId: source.documentId, locale: 'fr', data: { title: 'Human title' } });
+      .update({
+        documentId: source.documentId,
+        locale: 'fr',
+        data: fixtureDocumentData({ title: 'Human title' }),
+      });
     expect((await finish(await queue(source.documentId, true))).status).toBe('succeeded');
     expect(await target(source.documentId)).toMatchObject({ title: '[fr] A new article' });
   });
@@ -217,7 +225,11 @@ describe('real runtime conflict and permission controls', () => {
     await app().runtime.worker.execute();
     await app()
       .strapi.documents('api::article.article')
-      .update({ documentId: source.documentId, locale: 'en', data: { title: 'Changed source' } });
+      .update({
+        documentId: source.documentId,
+        locale: 'en',
+        data: fixtureDocumentData({ title: 'Changed source' }),
+      });
     expect(await finish(id)).toMatchObject({ status: 'conflict', error: { code: 'stale-source' } });
     expect(await target(source.documentId)).toBeNull();
   });
@@ -225,12 +237,20 @@ describe('real runtime conflict and permission controls', () => {
     const source = await freshSource();
     await app()
       .strapi.documents('api::article.article')
-      .update({ documentId: source.documentId, locale: 'fr', data: { title: 'Earlier edit' } });
+      .update({
+        documentId: source.documentId,
+        locale: 'fr',
+        data: fixtureDocumentData({ title: 'Earlier edit' }),
+      });
     const id = await queue(source.documentId, true);
     await app().runtime.worker.execute();
     await app()
       .strapi.documents('api::article.article')
-      .update({ documentId: source.documentId, locale: 'fr', data: { title: 'Newer human edit' } });
+      .update({
+        documentId: source.documentId,
+        locale: 'fr',
+        data: fixtureDocumentData({ title: 'Newer human edit' }),
+      });
     expect(await finish(id)).toMatchObject({ status: 'conflict', error: { code: 'human-edit' } });
     expect(await target(source.documentId)).toMatchObject({ title: 'Newer human edit' });
   });
@@ -428,7 +448,7 @@ it('rejects a changed schema snapshot before applying saved translations', async
   const id = await queue(source.documentId);
   await app().runtime.worker.execute();
   const attribute = app().strapi.contentType('api::article.article').attributes.title;
-  if (!attribute) throw new Error('Missing title schema');
+  if (!attribute || attribute.type !== 'string') throw new Error('Missing title schema');
   const original = attribute.private;
   attribute.private = true;
   try {
@@ -625,7 +645,11 @@ it('applies an already committed job idempotently after completion recovery', as
   await finish(id);
   await app()
     .strapi.documents('api::article.article')
-    .update({ documentId: source.documentId, locale: 'fr', data: { title: 'Later human edit' } });
+    .update({
+      documentId: source.documentId,
+      locale: 'fr',
+      data: fixtureDocumentData({ title: 'Later human edit' }),
+    });
   await app()
     .strapi.db.query('plugin::general-translation.job')
     .update({
@@ -767,7 +791,11 @@ it('rejects retry after the failed job source or target changed', async () => {
   await finish(id);
   await app()
     .strapi.documents('api::article.article')
-    .update({ documentId: source.documentId, locale: 'en', data: { title: 'Changed later' } });
+    .update({
+      documentId: source.documentId,
+      locale: 'en',
+      data: fixtureDocumentData({ title: 'Changed later' }),
+    });
   await expect(app().runtime.retry(id, app().actorId)).rejects.toMatchObject({
     diagnostic: { code: 'stale-source' },
   });
@@ -780,7 +808,7 @@ it('rejects retry after the failed job source or target changed', async () => {
     .update({
       documentId: other.documentId,
       locale: 'fr',
-      data: { title: 'Human target appeared' },
+      data: fixtureDocumentData({ title: 'Human target appeared' }),
     });
   await expect(app().runtime.retry(second, app().actorId)).rejects.toMatchObject({
     diagnostic: { code: 'human-edit' },
@@ -822,7 +850,11 @@ it('does not turn an all-human target into a silent success', async () => {
   const source = await freshSource();
   await app()
     .strapi.documents('api::article.article')
-    .update({ documentId: source.documentId, locale: 'fr', data: { title: 'All human' } });
+    .update({
+      documentId: source.documentId,
+      locale: 'fr',
+      data: fixtureDocumentData({ title: 'All human' }),
+    });
   expect(await finish(await queue(source.documentId))).toMatchObject({
     status: 'conflict',
     error: { code: 'human-edit' },
@@ -929,7 +961,7 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
   await strapi.documents('api::article.article').update({
     documentId: source.documentId,
     locale: 'en',
-    data: { summary: 'A detailed paragraph. '.repeat(1200) },
+    data: fixtureDocumentData({ summary: 'A detailed paragraph. '.repeat(1200) }),
   });
   await runtime.saveSettings({
     ...settings,
@@ -1028,7 +1060,7 @@ it('backs off a safe file-status read without losing exact remote identity', asy
     .update({
       documentId: source.documentId,
       locale: 'en',
-      data: { summary: 'A file paragraph. '.repeat(1200) },
+      data: fixtureDocumentData({ summary: 'A file paragraph. '.repeat(1200) }),
     });
   const id = await queue(source.documentId);
   expect((await app().runtime.repository.get(id))?.stage).toBe('upload');
@@ -1088,7 +1120,9 @@ it(
       .update({
         documentId: source.documentId,
         locale: 'en',
-        data: { summary: 'x'.repeat(Math.ceil(MAX_ENQUEUE_BYTES / targets.length / 2) + 1000) },
+        data: fixtureDocumentData({
+          summary: 'x'.repeat(Math.ceil(MAX_ENQUEUE_BYTES / targets.length / 2) + 1000),
+        }),
       });
     await expect(
       app().runtime.enqueue(
