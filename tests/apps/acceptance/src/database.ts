@@ -1,9 +1,10 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { vi } from 'vitest';
+import { cleanupTestResources } from './cleanup-resources';
 
 const execute = promisify(execFile);
 export interface TestDatabase {
@@ -48,26 +49,46 @@ export const createTestDatabase = async (root: string, client: string): Promise<
   await writeFile(envPath, `${lines.join('\n')}\n`, { mode: 0o600 });
   const containerPort = client === 'postgres' ? '5432' : '3306';
   const image = client === 'postgres' ? 'postgres:17' : 'mysql:8.4';
-  await execute(
-    runtime,
-    [
-      'run',
-      '--detach',
-      '--rm',
-      '--name',
-      name,
-      '--publish',
-      `127.0.0.1::${containerPort}`,
-      '--env-file',
-      envPath,
-      image,
-    ],
-    { timeout: 240_000 }
-  );
-  const close = async () => {
-    await execute(runtime, ['stop', name], { timeout: 30_000 });
+  const receiptPath = resolve(directory, 'container.cid');
+  const owned: { id?: string } = {};
+  const readOwnedId = async (): Promise<string | undefined> => {
+    if (owned.id) return owned.id;
+    try {
+      const identifier = (await readFile(receiptPath, 'utf8')).trim();
+      if (!/^[a-f0-9]{64}$/.test(identifier))
+        throw new Error('Container runtime wrote an invalid ownership receipt');
+      owned.id = identifier;
+      return identifier;
+    } catch (failure) {
+      if (failure instanceof Error && 'code' in failure && failure.code === 'ENOENT') return;
+      throw failure;
+    }
+  };
+  const close = async (): Promise<void> => {
+    const identifier = await readOwnedId();
+    if (identifier) await execute(runtime, ['stop', identifier], { timeout: 30_000 });
   };
   try {
+    await execute(
+      runtime,
+      [
+        'run',
+        '--detach',
+        '--rm',
+        '--name',
+        name,
+        '--cidfile',
+        receiptPath,
+        '--publish',
+        `127.0.0.1::${containerPort}`,
+        '--env-file',
+        envPath,
+        image,
+      ],
+      { timeout: 240_000 }
+    );
+    if (!(await readOwnedId()))
+      throw new Error('Container runtime did not record its ownership receipt');
     await vi.waitUntil(
       async () => {
         try {
@@ -96,7 +117,7 @@ export const createTestDatabase = async (root: string, client: string): Promise<
     if (!match?.[1]) throw new Error('Container did not expose a loopback database port');
     return { environment: { ...environment, DATABASE_PORT: match[1] }, close };
   } catch (failure) {
-    await close();
+    await cleanupTestResources([close], [failure]);
     throw failure;
   }
 };
