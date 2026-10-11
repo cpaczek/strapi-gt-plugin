@@ -20,7 +20,7 @@ import {
   configureTranslation,
   openDocument,
   openTranslation,
-  dismissEditorTour,
+  ensureEditorTourHandler,
   openSettings,
   saveSettings,
   sourceTitle,
@@ -89,11 +89,7 @@ const test = base.extend<{ editor: EditorFixture }, { adminSession: AdminSession
   },
   editor: async ({ page, adminSession }, use) => {
     await page.bringToFront();
-    await page.addLocatorHandler(
-      page.getByText('Step 1 of 4', { exact: true }),
-      () => dismissEditorTour(page),
-      { times: 1 }
-    );
+    await ensureEditorTourHandler(page);
     const api = adminSession.api;
     const originalResponse = await api.get('/general-translation/settings');
     expect(originalResponse.status()).toBe(200);
@@ -333,7 +329,6 @@ test('bulk translation queues only the selected saved documents', async ({ page,
   const optionsLoaded = page.waitForResponse('**/general-translation/translation-options');
   await page.goto(`${adminOrigin}/admin${collection}?locale=en`);
   await expect(page.getByRole('grid')).toBeVisible();
-  await dismissEditorTour(page);
   for (const source of [first, second]) {
     const row = page
       .getByRole('row')
@@ -404,6 +399,202 @@ test('bulk translation queues only the selected saved documents', async ({ page,
     ).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: unselected.documentId })).toHaveCount(0);
   await assertAccessible(page);
+});
+
+const selectTranslationFields = async (page: Page, paths: string[]) => {
+  await openSettings(page);
+  const labels = (await page.locator('label').allTextContents()).map((label) => label.trim());
+  for (const label of labels.filter(
+    (label) => label.startsWith('Translate ') && !label.startsWith('Translate media ')
+  )) {
+    const checkbox = page.getByRole('checkbox', { name: label, exact: true });
+    if (await checkbox.isEnabled())
+      await checkbox.setChecked(paths.includes(label.slice('Translate '.length)));
+  }
+  for (const path of paths)
+    await page.getByRole('checkbox', { name: `Translate ${path}`, exact: true }).check();
+  await saveSettings(page);
+};
+
+test('a preexisting human target is protected before its first GT request', async ({
+  page,
+  editor,
+}) => {
+  const control = await readMockControls();
+  await selectTranslationFields(page, ['title']);
+  const source = await editor.createSource('Preexisting human target');
+  const manualTitle = `Texte français rédigé par une personne ${randomUUID()}`;
+  const created = await editor.api.put(`${collection}/${source.documentId}?locale=fr`, {
+    data: { title: 'French draft', slug: `manual-fr-${randomUUID()}` },
+  });
+  expect(created.status()).toBe(200);
+  await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+  await page
+    .getByRole('textbox', { name: /^title\*?$/i })
+    .first()
+    .fill(manualTitle);
+  await saveDocument(page);
+  expect(await readDocumentJobs(editor.api, source.documentId)).toEqual([]);
+  const before = await control.counters();
+  await openDocument(page, source);
+  const ids = await queueFrench(page);
+  const protectedJobs = await awaitTerminalJobs(editor.api, source.documentId, ids);
+  expect(protectedJobs.map((job) => ({ status: job.status, code: job.error?.code }))).toEqual([
+    { status: 'conflict', code: 'human-edit' },
+  ]);
+  expect(await control.counters()).toEqual(before);
+  await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+  await expect(page.getByRole('textbox', { name: /^title\*?$/i }).first()).toHaveValue(manualTitle);
+  await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
+  const currentRow = () => page.getByRole('row').filter({ hasText: source.documentId });
+  await expect(currentRow().getByText('Needs review', { exact: true })).toBeVisible();
+  await expect(currentRow().getByText(messages.humanEdit().text, { exact: true })).toBeVisible();
+  await expect(currentRow().getByRole('button', { name: /Retry job/ })).toHaveCount(0);
+  await expect(
+    currentRow().getByText(/Review this document in Content Manager and start a new translation/)
+  ).toBeVisible();
+  await assertAccessible(page);
+  const changeLanguage = async (name: string) => {
+    await page.goto(`${adminOrigin}/admin/me`);
+    await page.getByRole('combobox').first().click();
+    await page.getByRole('option', { name, exact: true }).click();
+    const saved = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === '/admin/users/me' &&
+        response.request().method() === 'PUT'
+    );
+    await page.locator('button[type="submit"]').click();
+    expect((await saved).status()).toBe(200);
+  };
+  try {
+    for (const language of [
+      {
+        code: 'es',
+        name: 'Español',
+        happened: 'Un campo de destino está protegido contra la sustitución',
+      },
+      {
+        code: 'fr',
+        name: 'Français',
+        happened: 'Un champ cible est protégé contre le remplacement',
+      },
+      { code: 'ar', name: 'العربية', happened: 'أحد الحقول المستهدفة محمي من الاستبدال' },
+    ]) {
+      await changeLanguage(language.name);
+      await page.goto(`${adminOrigin}/admin/plugins/general-translation`);
+      await page.getByRole('main').focus();
+      await expect(currentRow().getByText(language.happened, { exact: false })).toBeVisible();
+      await expect(currentRow().getByText(messages.humanEdit().text, { exact: true })).toHaveCount(
+        0
+      );
+      await expect(currentRow().getByRole('button')).toHaveCount(0);
+      await assertAccessible(page);
+      await page.screenshot({
+        path: `../../../.work/screenshots/review2-preexisting-${language.code}.png`,
+        fullPage: true,
+      });
+    }
+    await changeLanguage('English');
+    await openDocument(page, source);
+    const forcedIds = await queueFrench(page, true);
+    expect(forcedIds.every((id) => !ids.includes(id))).toBe(true);
+    expect(
+      (await awaitTerminalJobs(editor.api, source.documentId, forcedIds)).map((job) => job.status)
+    ).toEqual(['succeeded']);
+    await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+    await expect(page.getByRole('textbox', { name: /^title\*?$/i }).first()).toHaveValue(
+      `[fr] ${source.title}`
+    );
+  } finally {
+    expect(
+      (await editor.api.put('/admin/users/me', { data: { preferedLanguage: 'en' } })).status()
+    ).toBe(200);
+  }
+});
+
+test('native optional text clearing preserves manual targets until force', async ({
+  page,
+  editor,
+}) => {
+  const control = await readMockControls();
+  await selectTranslationFields(page, ['summary']);
+  const source = await editor.createSource('Optional text clearing');
+  expect(
+    (
+      await editor.api.put(`${collection}/${source.documentId}?locale=fr`, {
+        data: { title: source.title, slug: `clear-fr-${randomUUID()}` },
+      })
+    ).status()
+  ).toBe(200);
+  const readSummary = async (locale: string) => {
+    const response = await editor.api.get(`${collection}/${source.documentId}?locale=${locale}`);
+    expect(response.status()).toBe(200);
+    return z
+      .object({ data: z.object({ summary: z.string().nullable() }) })
+      .parse(await response.json()).data.summary;
+  };
+  await openDocument(page, source);
+  const first = await queueFrench(page);
+  expect(
+    (await awaitTerminalJobs(editor.api, source.documentId, first)).map((job) => job.status)
+  ).toEqual(['succeeded']);
+  expect(await readSummary('fr')).toBe('[fr] A field note for translation acceptance.');
+  await page.getByRole('textbox', { name: /^summary$/i }).fill('');
+  await saveDocument(page);
+  const initialClear = await readSummary('en');
+  expect([null, '']).toContain(initialClear);
+  const beforeClear = await control.counters();
+  const cleared = await queueFrench(page);
+  expect(
+    (await awaitTerminalJobs(editor.api, source.documentId, cleared)).map((job) => job.status)
+  ).toEqual(['succeeded']);
+  expect(await readSummary('fr')).toBe(initialClear);
+  expect(await control.counters()).toEqual(beforeClear);
+  await page.getByRole('textbox', { name: /^summary$/i }).fill('Restored source text');
+  await saveDocument(page);
+  const restored = await queueFrench(page);
+  expect(
+    (await awaitTerminalJobs(editor.api, source.documentId, restored)).map((job) => job.status)
+  ).toEqual(['succeeded']);
+  const manual = `Résumé humain ${randomUUID()}`;
+  await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+  await page.getByRole('textbox', { name: /^summary$/i }).fill(manual);
+  await saveDocument(page);
+  await openDocument(page, source);
+  await page.getByRole('textbox', { name: /^summary$/i }).fill('');
+  await saveDocument(page);
+  const manualClear = await readSummary('en');
+  expect([null, '']).toContain(manualClear);
+  const beforeProtection = await control.counters();
+  const protectedIds = await queueFrench(page);
+  expect(
+    (await awaitTerminalJobs(editor.api, source.documentId, protectedIds)).map((job) => ({
+      status: job.status,
+      code: job.error?.code,
+    }))
+  ).toEqual([{ status: 'conflict', code: 'human-edit' }]);
+  expect(await readSummary('fr')).toBe(manual);
+  expect(await control.counters()).toEqual(beforeProtection);
+  const forced = await queueFrench(page, true);
+  expect(
+    (await awaitTerminalJobs(editor.api, source.documentId, forced)).map((job) => job.status)
+  ).toEqual(['succeeded']);
+  expect(await readSummary('fr')).toBe(manualClear);
+  expect(await control.counters()).toEqual(beforeProtection);
+  await openDocument(page, { documentId: source.documentId, locale: 'fr' });
+  await expect(page.getByRole('textbox', { name: /^summary$/i })).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: /^title\*?$/i }).first()).toHaveValue(
+    source.title
+  );
+  await base.info().attach('native-clearing-values', {
+    contentType: 'application/json',
+    body: JSON.stringify({
+      firstSave: initialClear,
+      afterManualEdit: manualClear,
+      translationRequestsAdded: 0,
+    }),
+  });
+  await assertAccessible(page, 'section[aria-label="General Translation controls"]');
 });
 
 test('human target edits survive normal translation and force requires consent', async ({

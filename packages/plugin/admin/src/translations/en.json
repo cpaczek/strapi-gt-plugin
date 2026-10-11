@@ -128,7 +128,7 @@
   "diagnostic.quota-exhausted.fallback": "Keep the existing translations until credit is available",
   "diagnostic.permission-denied.happened": "You do not have permission to translate this content",
   "diagnostic.permission-denied.fix": "Ask an administrator for the required content and locale permissions",
-  "diagnostic.human-edit.happened": "A target field was edited after translation",
+  "diagnostic.human-edit.happened": "A target field is protected from replacement",
   "diagnostic.human-edit.fix": "Review the target content before choosing force retranslate",
   "diagnostic.human-edit.fallback": "Keep the human edit",
   "diagnostic.stale-source.happened": "The source changed while translation was running",

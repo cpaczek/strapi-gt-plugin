@@ -33,7 +33,7 @@ exports[`canonical diagnostic wording > keeps every existing English diagnostic 
     "code": "human-edit",
     "details": {},
     "level": "warning",
-    "text": "General Translation: A target field was edited after translation. Review the target content before choosing force retranslate. Keep the human edit.",
+    "text": "General Translation: A target field is protected from replacement. Review the target content before choosing force retranslate. Keep the human edit.",
   },
   {
     "code": "stale-source",

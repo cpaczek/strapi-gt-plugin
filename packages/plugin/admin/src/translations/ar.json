@@ -128,7 +128,7 @@
   "diagnostic.quota-exhausted.fallback": "احتفظ بالترجمات الحالية حتى يتوفر رصيد",
   "diagnostic.permission-denied.happened": "ليس لديك إذن لترجمة هذا المحتوى",
   "diagnostic.permission-denied.fix": "اطلب من أحد المسؤولين منحك الأذونات المطلوبة للمحتوى والإعدادات المحلية",
-  "diagnostic.human-edit.happened": "تم تعديل أحد الحقول المستهدفة بعد الترجمة",
+  "diagnostic.human-edit.happened": "أحد الحقول المستهدفة محمي من الاستبدال",
   "diagnostic.human-edit.fix": "راجع المحتوى المستهدف قبل اختيار فرض إعادة الترجمة",
   "diagnostic.human-edit.fallback": "احتفظ بالتعديل البشري",
   "diagnostic.stale-source.happened": "تغيّر المصدر أثناء تنفيذ الترجمة",

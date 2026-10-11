@@ -128,7 +128,7 @@
   "diagnostic.quota-exhausted.fallback": "Conserva las traducciones existentes hasta que haya crédito disponible",
   "diagnostic.permission-denied.happened": "No tienes permiso para traducir este contenido",
   "diagnostic.permission-denied.fix": "Pide a un administrador los permisos necesarios para el contenido y las configuraciones regionales",
-  "diagnostic.human-edit.happened": "Se editó un campo de destino después de la traducción",
+  "diagnostic.human-edit.happened": "Un campo de destino está protegido contra la sustitución",
   "diagnostic.human-edit.fix": "Revisa el contenido de destino antes de elegir forzar una nueva traducción",
   "diagnostic.human-edit.fallback": "Conserva la edición humana",
   "diagnostic.stale-source.happened": "El contenido de origen cambió mientras se realizaba la traducción",
