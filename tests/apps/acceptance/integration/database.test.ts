@@ -79,6 +79,32 @@ const app = (): Core.Strapi => {
   return runtime.strapi;
 };
 
+const publishWithAcknowledgement = async (documentId: string, locale: string) => {
+  const publication = { observed: false };
+  const unsubscribe = app().eventHub.on('entry.publish', (payload: unknown) => {
+    const event = z
+      .object({
+        uid: z.string(),
+        entry: z.object({ documentId: z.string(), locale: z.string() }),
+      })
+      .safeParse(payload);
+    if (
+      event.success &&
+      event.data.uid === 'api::article.article' &&
+      event.data.entry.documentId === documentId &&
+      event.data.entry.locale === locale
+    )
+      publication.observed = true;
+    return Promise.resolve();
+  });
+  try {
+    await app().documents('api::article.article').publish({ documentId, locale });
+    await expect.poll(() => publication.observed).toBe(true);
+  } finally {
+    unsubscribe();
+  }
+};
+
 // Each matrix run starts with a new database and real framework services.
 describe('real Strapi database behavior', () => {
   it('loads the installed plugin', () => {
@@ -181,7 +207,8 @@ const isTranslationRuntime = (
   typeof value.worker.stop === 'function' &&
   typeof value.worker.execute === 'function' &&
   record(value.repository) &&
-  typeof value.repository.get === 'function';
+  typeof value.repository.get === 'function' &&
+  typeof value.repository.state === 'function';
 
 it('runs the durable translation with the initiating actor and records public GT requests', async () => {
   const service: unknown = app().plugin('general-translation').service('translation');
@@ -309,31 +336,7 @@ it('runs the durable translation with the initiating actor and records public GT
     );
   expect(revised.title).toBe(`[ar] ${revisedTitle}`);
   expect(revised.category.documentId).toBe(category.documentId);
-  const publication = { observed: false };
-  const unsubscribe = app().eventHub.on('entry.publish', (payload: unknown) => {
-    const event = z
-      .object({
-        uid: z.string(),
-        entry: z.object({ documentId: z.string(), locale: z.string() }),
-      })
-      .safeParse(payload);
-    if (
-      event.success &&
-      event.data.uid === 'api::article.article' &&
-      event.data.entry.documentId === source.documentId &&
-      event.data.entry.locale === 'ar'
-    )
-      publication.observed = true;
-    return Promise.resolve();
-  });
-  try {
-    await app()
-      .documents('api::article.article')
-      .publish({ documentId: source.documentId, locale: 'ar' });
-    await expect.poll(() => publication.observed).toBe(true);
-  } finally {
-    unsubscribe();
-  }
+  await publishWithAcknowledgement(source.documentId, 'ar');
   expect(
     articleRecord.parse(
       await app()
@@ -753,5 +756,179 @@ describe('null source clearing across database stores', () => {
     });
     expect(await readSummaryTarget(source.documentId)).toEqual({ ...previous, summary: null });
     expect(paidRequests()).toBe(before);
+  });
+});
+
+const lifecycleRecord = articleRecord.extend({ slug: z.string(), summary: z.string().nullable() });
+const readLifecycleDocument = async (
+  documentId: string,
+  locale: string,
+  status: 'draft' | 'published' = 'draft'
+) => {
+  const found = await app()
+    .documents('api::article.article')
+    .findOne({ documentId, locale, status });
+  return found === null ? null : lifecycleRecord.parse(found);
+};
+const createLifecycleSource = async () => {
+  const created = await createSource();
+  const summary = `Lifecycle source ${created.documentId}`;
+  await writeSummary(created.documentId, 'en', summary);
+  const otherFields: Record<string, string> = {
+    title: 'Keep the other locale title',
+    slug: `other-${created.documentId}`,
+    summary: 'Keep the other locale manual summary',
+  };
+  await app()
+    .documents('api::article.article')
+    .update({ documentId: created.documentId, locale: 'fr', data: otherFields });
+  return {
+    documentId: created.documentId,
+    source: lifecycleRecord.parse(await readLifecycleDocument(created.documentId, 'en')),
+    otherLocale: lifecycleRecord.parse(await readLifecycleDocument(created.documentId, 'fr')),
+  };
+};
+const protectHumanAfterRecovery = async (
+  fixture: Awaited<ReturnType<typeof createLifecycleSource>>,
+  actorId: number
+) => {
+  const published = await readLifecycleDocument(fixture.documentId, 'ar', 'published');
+  await writeSummary(fixture.documentId, 'ar', 'Human summary after lifecycle recovery');
+  const nextSource = `Changed after recovery ${fixture.documentId}`;
+  await writeSummary(fixture.documentId, 'en', nextSource);
+  const before = paidRequests();
+  const id = await enqueueSummary(fixture.documentId, actorId);
+  await translationRuntime().worker.execute();
+  expect(await translationRuntime().repository.get(id)).toMatchObject({
+    status: 'conflict',
+    error: { code: 'human-edit' },
+  });
+  expect(await readLifecycleDocument(fixture.documentId, 'ar')).toMatchObject({
+    summary: 'Human summary after lifecycle recovery',
+  });
+  expect(await readLifecycleDocument(fixture.documentId, 'ar', 'published')).toEqual(published);
+  expect(await readLifecycleDocument(fixture.documentId, 'fr')).toEqual(fixture.otherLocale);
+  expect(await readLifecycleDocument(fixture.documentId, 'en')).toMatchObject({
+    title: fixture.source.title,
+    slug: fixture.source.slug,
+    summary: nextSource,
+  });
+  expect(paidRequests()).toBe(before);
+};
+
+describe('text checkpoint lifecycle with media translation disabled', () => {
+  let originalSettings: PluginSettings | undefined;
+  beforeAll(async () => {
+    const service = translationRuntime();
+    await service.worker.stop();
+    originalSettings = await service.savedSettings();
+    const article = originalSettings.contentTypes['api::article.article'];
+    if (!article) throw new Error('The matrix article is not configured');
+    await service.saveSettings({
+      ...originalSettings,
+      createMissingLocales: true,
+      autoPublish: false,
+      contentTypes: {
+        ...originalSettings.contentTypes,
+        'api::article.article': {
+          ...article,
+          mediaMetadata: false,
+          fields: { ...article.fields, cover: { translate: false } },
+        },
+      },
+    });
+    expect(
+      (await service.savedSettings()).contentTypes['api::article.article']?.mediaMetadata
+    ).toBe(false);
+  });
+  afterAll(async () => {
+    if (originalSettings) await translationRuntime().saveSettings(originalSettings);
+  });
+
+  it('recreates a deleted target without force while retaining source, other locale, and later human edits', async () => {
+    const actor = await createEditor();
+    const fixture = await createLifecycleSource();
+    const service = translationRuntime();
+    await finishTranslation(await enqueueSummary(fixture.documentId, actor.id));
+    expect(await readLifecycleDocument(fixture.documentId, 'ar')).toMatchObject({
+      summary: `[ar] ${fixture.source.summary}`,
+    });
+    expect(
+      Object.keys(
+        (await service.repository.state('api::article.article', fixture.documentId, 'ar', 'draft'))
+          .checkpoints
+      ).length
+    ).toBeGreaterThan(0);
+    await app()
+      .documents('api::article.article')
+      .delete({ documentId: fixture.documentId, locale: 'ar' });
+    expect(await readLifecycleDocument(fixture.documentId, 'ar')).toBeNull();
+    expect(await readLifecycleDocument(fixture.documentId, 'en')).toEqual(fixture.source);
+    expect(await readLifecycleDocument(fixture.documentId, 'fr')).toEqual(fixture.otherLocale);
+    const afterDeletion = await service.repository.state(
+      'api::article.article',
+      fixture.documentId,
+      'ar',
+      'draft'
+    );
+    const before = paidRequests();
+    await finishTranslation(await enqueueSummary(fixture.documentId, actor.id));
+    expect(afterDeletion.checkpoints).toEqual({});
+    expect(await readLifecycleDocument(fixture.documentId, 'ar')).toMatchObject({
+      summary: `[ar] ${fixture.source.summary}`,
+    });
+    expect(paidRequests() - before).toBe(1);
+    expect(await readLifecycleDocument(fixture.documentId, 'en')).toEqual(fixture.source);
+    expect(await readLifecycleDocument(fixture.documentId, 'fr')).toEqual(fixture.otherLocale);
+    await protectHumanAfterRecovery(fixture, actor.id);
+  });
+
+  it('restores published checkpoints on discard and retranslates normally without weakening human protection', async () => {
+    const actor = await createEditor();
+    const fixture = await createLifecycleSource();
+    const service = translationRuntime();
+    await finishTranslation(await enqueueSummary(fixture.documentId, actor.id));
+    const initialCheckpoint = (
+      await service.repository.state('api::article.article', fixture.documentId, 'ar', 'draft')
+    ).checkpoints;
+    await publishWithAcknowledgement(fixture.documentId, 'ar');
+    const published = lifecycleRecord.parse(
+      await readLifecycleDocument(fixture.documentId, 'ar', 'published')
+    );
+    const publishedCheckpoint = (
+      await service.repository.state('api::article.article', fixture.documentId, 'ar', 'published')
+    ).checkpoints;
+    const revisedSummary = `Revised source ${fixture.documentId}`;
+    await writeSummary(fixture.documentId, 'en', revisedSummary);
+    await finishTranslation(await enqueueSummary(fixture.documentId, actor.id));
+    expect(await readLifecycleDocument(fixture.documentId, 'ar')).toMatchObject({
+      summary: `[ar] ${revisedSummary}`,
+    });
+    expect(await readLifecycleDocument(fixture.documentId, 'ar', 'published')).toEqual(published);
+    await app()
+      .documents('api::article.article')
+      .discardDraft({ documentId: fixture.documentId, locale: 'ar' });
+    expect(await readLifecycleDocument(fixture.documentId, 'ar')).toMatchObject({
+      summary: published.summary,
+    });
+    const afterDiscard = (
+      await service.repository.state('api::article.article', fixture.documentId, 'ar', 'draft')
+    ).checkpoints;
+    const before = paidRequests();
+    await finishTranslation(await enqueueSummary(fixture.documentId, actor.id));
+    expect(publishedCheckpoint).toEqual(initialCheckpoint);
+    expect(afterDiscard).toEqual(publishedCheckpoint);
+    expect(await readLifecycleDocument(fixture.documentId, 'ar')).toMatchObject({
+      summary: `[ar] ${revisedSummary}`,
+    });
+    expect(await readLifecycleDocument(fixture.documentId, 'ar', 'published')).toEqual(published);
+    expect(await readLifecycleDocument(fixture.documentId, 'en')).toMatchObject({
+      title: fixture.source.title,
+      slug: fixture.source.slug,
+      summary: revisedSummary,
+    });
+    expect(await readLifecycleDocument(fixture.documentId, 'fr')).toEqual(fixture.otherLocale);
+    expect(paidRequests() - before).toBe(1);
+    await protectHumanAfterRecovery(fixture, actor.id);
   });
 });
