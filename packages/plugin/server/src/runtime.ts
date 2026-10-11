@@ -19,6 +19,7 @@ import type {
   SettingsResponse,
   TranslationOptionsResponse,
   MediaOverlayRequest,
+  AppliedTranslation,
 } from '../../shared/contracts';
 import { messages } from '../../shared/messages';
 import { createGtClient, hashValue, retryDelay, translationEngine } from './engine';
@@ -152,27 +153,35 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
     prepared: PreparedTranslation,
     source: JsonObject,
     target: JsonObject | null,
-    patch?: JsonObject
+    applied?: AppliedTranslation
   ): Promise<void> => {
     const actor = await loadActorPermissions(strapi, job.actorId);
     const preview =
-      patch ??
+      applied ??
       translationEngine.apply(
         prepared,
         Object.fromEntries(prepared.segments.map((segment) => [segment.id, segment.text]))
-      ).patch;
+      );
     const fields = new Set([
       ...prepared.segments.map((segment) =>
         permissionField(prepared.input.schema, prepared.input.components, source, segment.path)
       ),
-      ...mutationFields(preview, prepared.input.schema, prepared.input.components),
+      ...mutationFields(preview.patch, prepared.input.schema, prepared.input.components),
     ]);
+    const readDependencies: { source: string[]; target: string[] } = { source: [], target: [] };
+    for (const dependency of preview.readDependencies) {
+      const document = (dependency.document === 'source' ? source : target) ?? denied();
+      readDependencies[dependency.document].push(
+        permissionField(prepared.input.schema, prepared.input.components, document, dependency.path)
+      );
+    }
     authorizeDocument({
       pluginAllowed: actor.plugin(job.permission),
       source,
       target,
       targetLocale: job.targetLocale,
       fields: [...fields],
+      readDependencies,
       createMissingLocales: job.settings.createMissingLocales,
       publish: job.settings.autoPublish && prepared.input.schema.draftAndPublish,
       can: checkContent(actor.checker(job.contentType)),
@@ -242,7 +251,7 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
           applied.patch[name] = Array.isArray(value) ? value.map(relation) : relation(value);
         }
       }
-      await authorize(job, prepared, prepared.input.source, target, applied.patch);
+      await authorize(job, prepared, prepared.input.source, target, applied);
       if (target === null)
         await repository.deleteState(job.contentType, job.documentId, job.targetLocale);
       const retainedMedia = target === null ? [] : previous.media;

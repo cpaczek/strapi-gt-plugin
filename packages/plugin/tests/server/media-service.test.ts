@@ -256,6 +256,7 @@ describe('localized media state', () => {
       {
         patch: {},
         checkpoints: {},
+        readDependencies: [],
         media: [
           { path: ['image'], assetId: '1', sourceHash: 'h', alternativeText: 'Nuages' },
           { path: ['image'], assetId: '1', sourceHash: 'c', caption: 'Ciel' },
@@ -426,7 +427,7 @@ it('keeps valid unchanged overlays when text changes in another field', () => {
   const changed = { ...document, title: 'New title' };
   expect(
     appliedMedia(
-      { patch: { title: 'New title' }, checkpoints: {}, media: [] },
+      { patch: { title: 'New title' }, checkpoints: {}, media: [], readDependencies: [] },
       changed,
       state,
       document
@@ -441,6 +442,7 @@ it('retains stale overlays for review without rebinding them to a replacement as
       patch: {},
       checkpoints: {},
       media: [{ path: ['image'], assetId: '9', sourceHash: 'h', caption: 'Wrong' }],
+      readDependencies: [],
     },
     changed,
     state,
@@ -455,6 +457,7 @@ it('replaces a translated property while preserving another localized property',
       patch: {},
       checkpoints: {},
       media: [{ path: ['image'], assetId: '1', sourceHash: 'new', alternativeText: 'Nouveau' }],
+      readDependencies: [],
     },
     document,
     state,

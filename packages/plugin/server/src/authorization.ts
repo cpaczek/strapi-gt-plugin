@@ -15,6 +15,7 @@ export interface AuthorizationInput {
   target: JsonObject | null;
   targetLocale: string;
   fields: string[];
+  readDependencies?: { source: string[]; target: string[] };
   createMissingLocales: boolean;
   publish: boolean;
   creationActorId?: number;
@@ -35,6 +36,17 @@ export const authorizeDocument = (input: AuthorizationInput): void => {
   if (!input.can('read', input.source) || !input.can(action, target)) denied();
   for (const field of input.fields) {
     if (!input.can('read', input.source, field) || !input.can(action, target, field)) denied();
+  }
+  for (const field of input.readDependencies?.source ?? []) {
+    if (!input.can('read', input.source, field)) denied();
+  }
+  for (const field of input.readDependencies?.target ?? []) {
+    if (
+      !input.target ||
+      !input.can('read', input.target) ||
+      !input.can('read', input.target, field)
+    )
+      denied();
   }
   if (input.publish && !input.can('publish', target)) denied();
 };

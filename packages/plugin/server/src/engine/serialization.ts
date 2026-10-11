@@ -26,6 +26,7 @@ interface FieldUnit {
   context?: string;
   segments: TranslationSegment[];
   sourceHash: string;
+  uidSourceField?: FieldSchema;
   media?: { asset: JsonObject; path: FieldPath; property: 'alternativeText' | 'caption' };
 }
 
@@ -75,7 +76,8 @@ const collect = (
     field: FieldSchema,
     rule: FieldRule | undefined,
     context: string | undefined,
-    media?: FieldUnit['media']
+    media?: FieldUnit['media'],
+    uidSourceField?: FieldSchema
   ): void => {
     const segments: TranslationSegment[] = [];
     const segment = (
@@ -138,6 +140,7 @@ const collect = (
       context,
       segments,
       sourceHash,
+      ...(uidSourceField ? { uidSourceField } : {}),
       ...(media ? { media } : {}),
     });
   };
@@ -223,7 +226,15 @@ const collect = (
       } else if (field.type === 'blocks' && Array.isArray(value)) {
         add(fieldPath, value, field, rule, context);
       } else if (field.type === 'uid' && rule?.translate && typeof value === 'string') {
-        add(fieldPath, value, field, rule, context);
+        add(
+          fieldPath,
+          value,
+          field,
+          rule,
+          context,
+          undefined,
+          schema.attributes[rule.sourceField ?? field.targetField ?? '']
+        );
       }
     }
   };
@@ -350,7 +361,10 @@ const apply = (
     patch: {},
     checkpoints: { ...input.checkpoints },
     media: [],
+    readDependencies: [],
   };
+  const sourceCopies: FieldPath[] = [];
+  const writtenPaths = new Set<string>();
   const write = (unit: FieldUnit, value: JsonValue): void => {
     const top = unit.path[0];
     if (typeof top !== 'string')
@@ -368,6 +382,7 @@ const apply = (
           ? structuredClone(target)
           : sourceValue(field, source, input.components)
       );
+      if (empty(target)) sourceCopies.push([top]);
     }
     for (let depth = 1; depth < unit.path.length; depth += 1) {
       const ancestor = unit.path.slice(0, depth);
@@ -381,9 +396,11 @@ const apply = (
         if (branch === undefined)
           throw invalidTranslation('The component path is unavailable in the source');
         setPath(result.patch, ancestor, branch);
+        sourceCopies.push(ancestor);
       }
     }
     setPath(result.patch, unit.path, value);
+    writtenPaths.add(pathKey(unit.path));
   };
   for (const unit of units.filter((entry) => entry.field.type !== 'uid')) {
     const translated = unit.segments.map((entry) => {
@@ -421,12 +438,25 @@ const apply = (
     if (unit.rule?.uidStrategy === 'regenerate') {
       const sourceField = unit.rule.sourceField ?? unit.field.targetField;
       const sibling = sourceField ? [...unit.path.slice(0, -1), sourceField] : [];
-      const title = atPath(result.patch, sibling) ?? atPath(input.target, sibling);
+      if (
+        !unit.uidSourceField ||
+        unit.uidSourceField.private ||
+        unit.uidSourceField.localized === false ||
+        !['string', 'text', 'richtext'].includes(unit.uidSourceField.type)
+      )
+        throw invalidTranslation('A slug must use a nonprivate localized text source field');
+      const patchTitle = atPath(result.patch, sibling);
+      const title = patchTitle !== undefined ? patchTitle : atPath(input.target, sibling);
       if (typeof title !== 'string')
         throw invalidTranslation('A slug cannot be generated without its translated source field');
       const normalizedTitle = title.normalize('NFKC').trim();
       if (!normalizedTitle)
         throw invalidTranslation('The translated title cannot produce a nonempty slug');
+      const fromSource =
+        patchTitle !== undefined &&
+        (writtenPaths.has(pathKey(sibling)) ||
+          sourceCopies.some((path) => path.every((part, index) => sibling[index] === part)));
+      result.readDependencies.push({ document: fromSource ? 'source' : 'target', path: sibling });
       const letters = normalizedTitle
         .normalize('NFKD')
         .replace(/\p{M}+/gu, '')

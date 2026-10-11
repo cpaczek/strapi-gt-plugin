@@ -145,6 +145,7 @@ export const startStrapiFixture = async (
         title: { type: 'string' },
         count: { type: 'integer' },
         image: { type: 'media', multiple: false },
+        ...(options.uid ? { slug: { type: 'uid', targetField: 'title' } } : {}),
       },
     },
     true
