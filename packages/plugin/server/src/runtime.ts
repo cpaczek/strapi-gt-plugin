@@ -138,7 +138,7 @@ export const createPluginRuntime = (strapi: Core.Strapi) => {
       components,
       source,
       target: targetSnapshot,
-      checkpoints: state.checkpoints,
+      checkpoints: target === null ? {} : state.checkpoints,
       rules: configured.fields,
       force: job.force,
       mediaMetadata: configured.mediaMetadata,

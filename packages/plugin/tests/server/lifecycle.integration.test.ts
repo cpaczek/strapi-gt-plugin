@@ -101,8 +101,10 @@ const translated = async (documentId: string, locale = 'fr', model: Model = arti
   expect(job.status, JSON.stringify(job.error)).toBe('succeeded');
   return job;
 };
+const updateText = (documentId: string, locale: string, data: Record<string, string>) =>
+  app().strapi.documents(article).update({ documentId, locale, data });
 const revise = (documentId: string, summary = 'Revised source') =>
-  app().strapi.documents(article).update({ documentId, locale: 'en', data: { summary } });
+  updateText(documentId, 'en', { summary });
 const restrictedActor = async (create: boolean) => {
   sequence += 1;
   const role = z.object({ id: z.number() }).parse(
@@ -250,13 +252,9 @@ describe('ordinary translation state with media disabled', () => {
   it('preserves a genuine human value across publish and discard', async () => {
     const id = await source();
     await translated(id);
-    await app()
-      .strapi.documents(article)
-      .update({ documentId: id, locale: 'fr', data: { summary: 'Human published value' } });
+    await updateText(id, 'fr', { summary: 'Human published value' });
     await app().strapi.documents(article).publish({ documentId: id, locale: 'fr' });
-    await app()
-      .strapi.documents(article)
-      .update({ documentId: id, locale: 'fr', data: { summary: 'Temporary draft' } });
+    await updateText(id, 'fr', { summary: 'Temporary draft' });
     await app().strapi.documents(article).discardDraft({ documentId: id, locale: 'fr' });
     await revise(id);
     const job = await translate(id);
@@ -305,9 +303,7 @@ it.each(['Human recreation', ''])(
     await translated(id);
     await app().runtime.saveSettings({ ...settings(), contentTypes: {} });
     await app().strapi.documents(article).delete({ documentId: id, locale: 'fr' });
-    await app()
-      .strapi.documents(article)
-      .update({ documentId: id, locale: 'fr', data: { title: 'Human title', summary } });
+    await updateText(id, 'fr', { title: 'Human title', summary });
     await app().runtime.saveSettings(settings());
     const job = await translate(id);
     expect(job.status).toBe('conflict');
@@ -365,7 +361,9 @@ it.each(['delete', 'unpublish'] as const)(
       new Error('Synthetic state failure')
     );
     await expect(
-      app().strapi.documents(article)[operation]({ documentId: id, locale: 'fr' })
+      operation === 'delete'
+        ? app().strapi.documents(article).delete({ documentId: id, locale: 'fr' })
+        : app().strapi.documents(article).unpublish({ documentId: id, locale: 'fr' })
     ).rejects.toThrow('Synthetic state failure');
     expect(await read(id, 'fr', 'published')).toMatchObject({ summary: '[fr] First source' });
     expect(await state(id)).toEqual(before);

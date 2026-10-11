@@ -272,9 +272,9 @@ const register = ({ strapi }: { strapi: Core.Strapi }): void => {
       const output = await next();
       const params: unknown = context.params;
       if (
-        configured.mediaMetadata &&
         objectRecord(params) &&
-        typeof params.documentId === 'string'
+        typeof params.documentId === 'string' &&
+        ['publish', 'discardDraft', 'unpublish', 'delete'].includes(context.action)
       ) {
         const returned: unknown[] =
           objectRecord(output) && Array.isArray(output.entries)
