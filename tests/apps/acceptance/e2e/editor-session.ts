@@ -10,15 +10,23 @@ export const readTestAccount = (): Promise<TestAccount> =>
     process.env.TESTBED_ACCOUNT_FILE ??
       resolve(import.meta.dirname, '../../../../.work/testbed/local.json')
   );
-export const signIn = async (page: Page, supplied?: TestAccount): Promise<void> => {
-  const account = supplied ?? (await readTestAccount());
-  await page.addLocatorHandler(
+const editorTourHandlers = new WeakMap<Page, Promise<void>>();
+export const ensureEditorTourHandler = (page: Page): Promise<void> => {
+  const existing = editorTourHandlers.get(page);
+  if (existing) return existing;
+  // One handler owns Skip; direct clicks can otherwise resume after it removes their target.
+  const registration = page.addLocatorHandler(
     page.getByText('Step 1 of 4', { exact: true }),
     async () => {
       await page.getByRole('button', { name: 'Skip', exact: true }).click();
-    },
-    { times: 1 }
+    }
   );
+  editorTourHandlers.set(page, registration);
+  return registration;
+};
+export const signIn = async (page: Page, supplied?: TestAccount): Promise<void> => {
+  const account = supplied ?? (await readTestAccount());
+  await ensureEditorTourHandler(page);
   await page.goto(`${adminOrigin}/admin`);
   await expect(page.getByLabel(/^Email/i)).toBeVisible();
   if (await page.getByLabel(/^First name/i).isVisible()) {
@@ -83,10 +91,6 @@ export const configureTranslation = async (
   }
   await saveSettings(page);
 };
-export const dismissEditorTour = async (page: Page): Promise<void> => {
-  const skip = page.getByRole('button', { name: 'Skip', exact: true });
-  if (await skip.isVisible()) await skip.click();
-};
 export const openTranslation = async (page: Page): Promise<void> => {
   await page.getByRole('button', { name: 'More document actions', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Translate', exact: true }).click();
@@ -98,6 +102,7 @@ export interface DocumentLocation {
   title?: string;
 }
 export const openDocument = async (page: Page, options: DocumentLocation = {}): Promise<string> => {
+  await ensureEditorTourHandler(page);
   const collection = `${adminOrigin}/admin/content-manager/collection-types/api::article.article`;
   const locale = options.locale ?? 'en';
   const query = new URLSearchParams({ 'plugins[i18n][locale]': locale });
@@ -106,10 +111,8 @@ export const openDocument = async (page: Page, options: DocumentLocation = {}): 
   else {
     await page.goto(`${collection}?${query}`);
     await expect(page.getByRole('grid')).toBeVisible();
-    await dismissEditorTour(page);
     await page.getByText(options.title ?? sourceTitle, { exact: true }).click();
   }
-  await dismissEditorTour(page);
   await expect(page).toHaveURL(/\/collection-types\/api::article\.article\/[^/?]+/);
   await expect(page.getByRole('textbox', { name: /^title\*?$/i }).first()).toBeVisible();
   const documentId = new URL(page.url()).pathname.split('/').at(-1);
