@@ -46,7 +46,9 @@ export default {
       to: `plugins/${PLUGIN_ID}`,
       icon: Earth,
       intlLabel: descriptor('jobs.title'),
-      permissions: Object.values(PERMISSIONS).map((action) => ({ action })),
+      permissions: [PERMISSIONS.readSettings, PERMISSIONS.translate, PERMISSIONS.bulkTranslate].map(
+        (action) => ({ action })
+      ),
       Component: async () => ({ default: (await import('./pages/JobsPage')).JobsPage }),
     });
   },

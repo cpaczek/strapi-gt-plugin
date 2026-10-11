@@ -115,6 +115,7 @@ try {
       'e2e/reader.spec.ts',
       'e2e/publishing.spec.ts',
       'e2e/editor-controls.spec.ts',
+      'e2e/jobs-permissions.spec.ts',
       'e2e/editor-tour.spec.ts',
       'e2e/accessibility.spec.ts',
     ],

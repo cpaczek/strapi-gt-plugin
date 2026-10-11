@@ -11,11 +11,17 @@ import { JobTable } from '../components/JobTable';
 
 export const JobsPage = () => {
   const text = useText();
-  const permissions = useRBAC(Object.values(PERMISSIONS).map((action) => ({ action })));
+  const permissions = useRBAC(
+    [PERMISSIONS.readSettings, PERMISSIONS.translate, PERMISSIONS.bulkTranslate].map((action) => ({
+      action,
+    }))
+  );
   const allowed =
     !permissions.isLoading &&
     !permissions.error &&
-    Object.values(permissions.allowedActions).some(Boolean);
+    (permissions.allowedActions.canReadSettings === true ||
+      permissions.allowedActions.canTranslate === true ||
+      permissions.allowedActions.canBulkTranslate === true);
   const canTranslate =
     permissions.allowedActions.canTranslate || permissions.allowedActions.canBulkTranslate;
   const [page, setPage] = useState(1);
