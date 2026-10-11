@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { chromium } from '@playwright/test';
 
-const origin = new URL(process.argv[2]);
+const originArgument = process.argv[2];
+assert.ok(originArgument, 'Packed app origin was not supplied');
+const origin = new URL(originArgument);
 assert.equal(origin.protocol, 'http:');
 assert.equal(origin.hostname, '127.0.0.1');
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
+  /** @type {string[]} */
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(new URL('/admin', origin).href);

@@ -1,17 +1,23 @@
 import assert from 'node:assert/strict';
 import { browserChildEnvironment } from './browser-fixture.ts';
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { cp, mkdir, mkdtemp, readFile, symlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { setTimeout as pollDelay } from 'node:timers/promises';
-import { promisify } from 'node:util';
+import {
+  runSafeCommand,
+  sanitizeCommandOutput,
+} from '../../../../scripts/testbed/safe-command.mjs';
+import { stopOwnedProcessGroup } from '../../../../scripts/testbed/owned-process.mjs';
 import { declaredBinary } from '../../../../scripts/testbed/package-bin.mjs';
 
 const root = resolve(import.meta.dirname, '../../../..');
-const origin = new URL(process.argv[2]);
+const originArgument = process.argv[2];
+assert.ok(originArgument, 'Packed app origin was not supplied');
+const origin = new URL(originArgument);
 assert.equal(origin.protocol, 'http:');
 assert.equal(origin.hostname, '127.0.0.1');
 assert.equal(origin.username, '');
@@ -49,12 +55,11 @@ const environment = {
   NEXT_TELEMETRY_DISABLED: '1',
   STRAPI_URL: origin.origin,
 };
-const execute = promisify(execFile);
 const require = createRequire(resolve(root, 'playground-next/package.json'));
 const manifestPath = require.resolve('next/package.json');
 const binary = declaredBinary(JSON.parse(await readFile(manifestPath, 'utf8')), 'next');
 const nextCli = resolve(dirname(manifestPath), binary);
-const build = await execute(process.execPath, [nextCli, 'build', '--webpack'], {
+const build = await runSafeCommand(process.execPath, [nextCli, 'build', '--webpack'], {
   cwd: readerDirectory,
   env: environment,
   timeout: 180000,
@@ -69,7 +74,7 @@ const address = reservation.address();
 assert.ok(address && typeof address !== 'string');
 const port = address.port;
 await new Promise((resolve, reject) =>
-  reservation.close((error) => (error ? reject(error) : resolve()))
+  reservation.close((error) => (error ? reject(error) : resolve(undefined)))
 );
 const reader = spawn(
   process.execPath,
@@ -98,8 +103,8 @@ try {
     if (readiness.ready) break;
     await pollDelay(100);
   }
-  assert.ok(readiness.ready, `Packed reader did not start: ${output.text}`);
-  const result = await execute(
+  assert.ok(readiness.ready, `Packed reader did not start: ${sanitizeCommandOutput(output.text)}`);
+  const result = await runSafeCommand(
     'pnpm',
     [
       '--filter',
@@ -136,8 +141,5 @@ try {
     'Packed production app passed the shared editor and reader acceptance suites.\n'
   );
 } finally {
-  if (reader.exitCode === null && reader.pid) {
-    process.kill(-reader.pid, 'SIGTERM');
-    await once(reader, 'exit');
-  }
+  await stopOwnedProcessGroup(reader);
 }

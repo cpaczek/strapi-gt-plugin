@@ -1,13 +1,10 @@
-import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { promisify } from 'node:util';
 import { z } from 'zod';
 import { startMockGt } from './mock-gt';
-
-const execute = promisify(execFile);
+import { runSafeCommand } from '../../../../scripts/testbed/safe-command.mjs';
 const root = resolve(import.meta.dirname, '../../../..');
 const packageSchema = z.object({ name: z.string(), version: z.string() }).passthrough();
 const run = async (
@@ -15,7 +12,7 @@ const run = async (
   cwd: string,
   environment: Record<string, string> = {}
 ): Promise<void> => {
-  const result = await execute('pnpm', args, {
+  const result = await runSafeCommand('pnpm', args, {
     cwd,
     maxBuffer: 8_000_000,
     timeout: 1_800_000,
@@ -112,6 +109,8 @@ await writeFile(
   { mode: 0o600 }
 );
 await cp(resolve(root, 'scripts/testbed/fresh-smoke.mjs'), resolve(appDirectory, 'smoke.mjs'));
+for (const helper of ['safe-command.mjs', 'owned-process.mjs'])
+  await cp(resolve(root, 'scripts/testbed', helper), resolve(appDirectory, helper));
 await cp(
   resolve(directory, tarball),
   resolve(appDirectory, 'strapi-plugin-general-translation.tgz')
