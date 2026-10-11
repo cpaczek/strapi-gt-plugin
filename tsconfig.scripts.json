@@ -5,6 +5,7 @@
     "scripts/testbed/live-demo.ts",
     "scripts/live-demo.test.ts",
     "scripts/testbed/demo.ts",
-    "scripts/demo.test.ts"
+    "scripts/demo.test.ts",
+    "scripts/demo-descendants.test.ts"
   ]
 }

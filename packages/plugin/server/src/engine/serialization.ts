@@ -158,10 +158,14 @@ const collect = (
         field.private ||
         (nested ? field.localized === false : field.localized !== true && field.type !== 'uid') ||
         rule?.translate === false ||
-        value === undefined ||
-        value === null
+        value === undefined
       )
         continue;
+      if (value === null) {
+        if (['string', 'text', 'richtext', 'blocks'].includes(field.type))
+          add(fieldPath, value, field, rule, context);
+        continue;
+      }
       if (field.type === 'component' || field.type === 'dynamiczone') {
         const target = atPath(input.target, fieldPath);
         const shape = (candidate: JsonValue | undefined): JsonValue =>
@@ -236,6 +240,8 @@ const select = (
     const key = pathKey(unit.path);
     const checkpoint = input.checkpoints[key];
     const target = atPath(input.target, unit.path);
+    if (unit.value === null && !checkpoint && (target === undefined || target === null))
+      return false;
     const targetHash = hashValue(target ?? null);
     if (!input.force && (checkpoint ? targetHash !== checkpoint.targetHash : !empty(target))) {
       // Raw shared upload metadata is not a human-created localized overlay.
@@ -388,7 +394,7 @@ const apply = (
     let value: JsonValue = unit.value;
     if (unit.field.type === 'richtext' && typeof unit.value === 'string')
       value = replaceMarkdown(unit.value, markdownSpans(unit.value), translated);
-    else if (unit.field.type === 'blocks') {
+    else if (unit.field.type === 'blocks' && Array.isArray(unit.value)) {
       const wrapper: JsonObject = { blocks: structuredClone(unit.value) };
       unit.segments.forEach((entry, index) =>
         setPath(wrapper, ['blocks', ...entry.path.slice(unit.path.length)], translated[index] ?? '')
