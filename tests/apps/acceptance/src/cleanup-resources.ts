@@ -2,6 +2,15 @@ export const cleanupTestResources = async (
   steps: readonly (() => void | Promise<void>)[],
   initialFailures: readonly unknown[] = []
 ): Promise<void> => {
-  for (const step of steps) await step();
-  if (initialFailures.length) throw initialFailures[0];
+  const failures = [...initialFailures];
+  for (const step of steps) {
+    try {
+      await step();
+    } catch (failure) {
+      failures.push(failure);
+    }
+  }
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1)
+    throw new AggregateError(failures, 'Test resource cleanup failed', { cause: failures[0] });
 };

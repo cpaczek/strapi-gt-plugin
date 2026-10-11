@@ -6,6 +6,7 @@ import type { PluginRuntime } from '../../../../packages/plugin/server/src/runti
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { createTestDatabase, type TestDatabase } from '../src/database';
+import { cleanupTestResources } from '../src/cleanup-resources';
 import { startMockGt, type MockGtServer } from '../src/mock-gt';
 
 const root = resolve(import.meta.dirname, '../../../..');
@@ -63,17 +64,26 @@ beforeAll(async () => {
   await runtime.strapi.load();
 });
 afterAll(async () => {
-  if (runtime.strapi) {
-    await runtime.strapi.destroy();
-    for (const [event, listeners] of preservedListeners)
-      for (const listener of listeners) {
-        if (isProcessListener(listener) && !process.rawListeners(event).includes(listener))
-          process.on(event, listener);
-      }
-  }
-  if (runtime.mock) await runtime.mock.close();
-  if (runtime.database) await runtime.database.close();
+  await cleanupTestResources([
+    async () => {
+      await runtime.strapi?.destroy();
+    },
+    () => {
+      for (const [event, listeners] of preservedListeners)
+        for (const listener of listeners) {
+          if (isProcessListener(listener) && !process.rawListeners(event).includes(listener))
+            process.on(event, listener);
+        }
+    },
+    async () => {
+      await runtime.mock?.close();
+    },
+    async () => {
+      await runtime.database?.close();
+    },
+  ]);
 });
+
 const app = (): Core.Strapi => {
   if (!runtime.strapi) throw new Error('Strapi did not boot');
   return runtime.strapi;
