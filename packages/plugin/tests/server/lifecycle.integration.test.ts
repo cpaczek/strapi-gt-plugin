@@ -318,12 +318,14 @@ it('still requires create permission when an absent locale has stale checkpoints
   await app().strapi.documents(article).delete({ documentId: id, locale: 'fr' });
   await app().runtime.saveSettings(settings());
   const actor = await restrictedActor(false);
+  const orphaned = await state(id);
   const before = app().mock.requests.length;
   await expect(translate(id, 'fr', article, actor)).rejects.toMatchObject({
     diagnostic: { code: 'permission-denied' },
   });
   expect(app().mock.requests).toHaveLength(before);
   expect(await read(id)).toBeNull();
+  expect(await state(id)).toEqual(orphaned);
 });
 it('does not create or publish a locale without publish permission', async () => {
   const id = await source();
@@ -369,3 +371,86 @@ it.each(['delete', 'unpublish'] as const)(
     expect(await state(id)).toEqual(before);
   }
 );
+
+it('does not restore old manual media after an absent locale is recreated with media disabled', async () => {
+  await app().runtime.saveSettings(settings(true));
+  const id = await source();
+  await translated(id);
+  await translated(id, 'ar');
+  const arabic = await state(id, 'ar');
+  await app().runtime.mediaDocument(article, id, 'fr', 'draft', app().actorId, {
+    contentType: article,
+    documentId: id,
+    locale: 'fr',
+    path: ['image'],
+    property: 'caption',
+    value: 'A prior manual caption',
+    reset: false,
+  });
+  await app().runtime.saveSettings({ ...settings(), contentTypes: {} });
+  await app().strapi.documents(article).delete({ documentId: id, locale: 'fr' });
+  await app().runtime.saveSettings(settings());
+  await translated(id);
+  await app().runtime.saveSettings(settings(true));
+  const data: Record<string, number> = { image: app().assetId };
+  await app().strapi.documents(article).update({ documentId: id, locale: 'fr', data });
+  const response = await app().runtime.mediaDocument(article, id, 'fr', 'draft', app().actorId);
+  expect(await state(id, 'ar')).toEqual(arabic);
+  expect(response.items.find((item) => item.property === 'caption')).toMatchObject({
+    value: 'Blue sky',
+    status: 'source',
+  });
+});
+
+const createOrphanedLocale = async () => {
+  const id = await source();
+  await translated(id);
+  await app().strapi.documents(article).publish({ documentId: id, locale: 'fr' });
+  const draft = await state(id);
+  const published = await state(id, 'fr', 'published');
+  await app().runtime.saveSettings({ ...settings(), contentTypes: {} });
+  await app().strapi.documents(article).delete({ documentId: id, locale: 'fr' });
+  await app().runtime.saveSettings(settings());
+  return { id, draft, published };
+};
+it('clears orphaned publication state when only a new draft is recreated', async () => {
+  const { id } = await createOrphanedLocale();
+  await translated(id);
+  expect(await state(id, 'fr', 'published')).toEqual(empty);
+  expect(await read(id, 'fr', 'published')).toBeNull();
+  expect(Object.keys((await state(id)).checkpoints).length).toBeGreaterThan(0);
+});
+it('rolls back orphan cleanup and locale creation when replacement state fails', async () => {
+  const { id, draft, published } = await createOrphanedLocale();
+  vi.spyOn(app().runtime.repository, 'saveState').mockRejectedValueOnce(
+    new Error('Synthetic replacement failure')
+  );
+  const job = await translate(id);
+  expect(job.status).toBe('failed');
+  expect(await read(id)).toBeNull();
+  expect(await state(id)).toEqual(draft);
+  expect(await state(id, 'fr', 'published')).toEqual(published);
+});
+it('retains a manual media overlay on an existing locale while media is temporarily disabled', async () => {
+  await app().runtime.saveSettings(settings(true));
+  const id = await source();
+  await translated(id);
+  await app().runtime.mediaDocument(article, id, 'fr', 'draft', app().actorId, {
+    contentType: article,
+    documentId: id,
+    locale: 'fr',
+    path: ['image'],
+    property: 'caption',
+    value: 'Keep this human caption',
+    reset: false,
+  });
+  await app().runtime.saveSettings(settings());
+  await revise(id);
+  await translated(id);
+  await app().runtime.saveSettings(settings(true));
+  const response = await app().runtime.mediaDocument(article, id, 'fr', 'draft', app().actorId);
+  expect(response.items.find((item) => item.property === 'caption')).toMatchObject({
+    value: 'Keep this human caption',
+    status: 'manual',
+  });
+});
