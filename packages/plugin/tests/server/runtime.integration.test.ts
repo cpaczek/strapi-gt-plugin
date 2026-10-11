@@ -1000,9 +1000,41 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
   const start = mock.requests.length;
   const persist = runtime.repository.saveProgress;
   let checkpoints = 0;
+  const checkpointEvents: { saved: boolean; completed: number }[] = [];
+  const transport: {
+    status?: number;
+    error?: string;
+    cause?: string;
+    code?: string;
+    elapsedMs: number;
+  }[] = [];
+  const realFetch = globalThis.fetch;
+  const captureFetch = () =>
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (...parameters) => {
+      const started = performance.now();
+      try {
+        const response = await realFetch(...parameters);
+        transport.push({ status: response.status, elapsedMs: performance.now() - started });
+        return response;
+      } catch (failure) {
+        const cause = failure instanceof Error ? failure.cause : undefined;
+        transport.push({
+          error: formatUnknownError(failure),
+          cause: cause instanceof Error ? formatUnknownError(cause) : undefined,
+          code:
+            cause instanceof Error && 'code' in cause && typeof cause.code === 'string'
+              ? formatUnknownError(cause.code)
+              : undefined,
+          elapsedMs: performance.now() - started,
+        });
+        throw failure;
+      }
+    });
+  const capture = captureFetch();
   runtime.repository.saveProgress = async (job, completed) => {
     const saved = await persist(job, completed);
     checkpoints += 1;
+    checkpointEvents.push({ saved, completed: Object.keys(completed).length });
     if (checkpoints === 1) mock.failNext({ status: 429 });
     return saved;
   };
@@ -1010,9 +1042,40 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
     await runtime.worker.execute();
   } finally {
     runtime.repository.saveProgress = persist;
+    capture.mockRestore();
   }
   const waiting = await runtime.repository.get(id);
-  expect(waiting?.status).toBe('waiting');
+  const saveEvidence = async (
+    phase: string,
+    snapshot: Awaited<ReturnType<typeof runtime.repository.get>>,
+    successfulOccurrences: number[] = []
+  ) => {
+    const evidenceDirectory = resolve(import.meta.dirname, '../../../../.work/server-stability');
+    await mkdir(evidenceDirectory, { recursive: true });
+    await writeFile(
+      resolve(evidenceDirectory, `paid-chunks-${phase}-${Date.now()}-${process.pid}.json`),
+      JSON.stringify(
+        {
+          job: snapshot ? summarizeJob(snapshot) : null,
+          checkpointEvents,
+          storedChunkCount: Object.keys(snapshot?.runtimeProgress ?? {}).length,
+          successfulOccurrences,
+          transport,
+          requests: mock.requests.slice(start).map(({ method, path, projectId, apiVersion }) => ({
+            method,
+            path,
+            projectId,
+            apiVersion,
+          })),
+        },
+        null,
+        2
+      ),
+      { mode: 0o600 }
+    );
+  };
+  await saveEvidence('first-attempt', waiting);
+  expect(waiting?.status, JSON.stringify(waiting?.error)).toBe('waiting');
   expect(Object.keys(waiting?.runtimeProgress ?? {}).length).toBeGreaterThan(0);
   expect(await target(source.documentId)).toBeNull();
   const first = mock.requests.slice(start).find((request) => request.path === '/v2/translate');
@@ -1022,9 +1085,14 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
   );
   await makeDue(id);
   const resumed = createPluginRuntime(strapi);
-  await resumed.worker.execute();
-  await resumed.worker.execute();
-  expect((await resumed.repository.get(id))?.status).toBe('succeeded');
+  const resumedCapture = captureFetch();
+  try {
+    await resumed.worker.execute();
+    await resumed.worker.execute();
+  } finally {
+    resumedCapture.mockRestore();
+  }
+  const completed = await resumed.repository.get(id);
   const requestedIds = mock.requests
     .slice(start)
     .filter((request) => request.path === '/v2/translate')
@@ -1033,6 +1101,12 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
         z.object({ requests: z.record(z.string(), z.unknown()) }).parse(request.body).requests
       )
     );
+  await saveEvidence(
+    'resumed-attempt',
+    completed,
+    successfulIds.map((succeeded) => requestedIds.filter((id) => id === succeeded).length)
+  );
+  expect(completed?.status, JSON.stringify(completed?.error)).toBe('succeeded');
   for (const succeeded of successfulIds)
     expect(requestedIds.filter((id) => id === succeeded)).toHaveLength(1);
 });
