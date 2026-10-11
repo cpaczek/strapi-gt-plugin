@@ -34,7 +34,9 @@ describe('published documentation contract', () => {
     expect(captures.length).toBeGreaterThanOrEqual(1);
     expect(captures.length).toBeLessThanOrEqual(2);
     for (const capture of captures) {
-      const imagePath = resolve(root, capture[1]);
+      const image = capture[1];
+      if (!image) throw new Error('Expected a screenshot path');
+      const imagePath = resolve(root, image);
       expect(imagePath.startsWith(`${root}/docs/screenshots/`)).toBe(true);
       expect([...readFileSync(imagePath).subarray(0, 8)]).toEqual([
         137, 80, 78, 71, 13, 10, 26, 10,
@@ -46,8 +48,12 @@ describe('published documentation contract', () => {
       const pathname = resolve(root, filename);
       const markdown = readFileSync(pathname, 'utf8');
       for (const link of markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
-        if (/^[a-z]+:/i.test(link[1]) || link[1].startsWith('#')) continue;
-        expect(existsSync(resolve(dirname(pathname), link[1].split('#')[0])), link[1]).toBe(true);
+        const href = link[1];
+        if (!href) throw new Error('Expected a documentation link');
+        if (/^[a-z]+:/i.test(href) || href.startsWith('#')) continue;
+        const relativePath = href.split('#')[0];
+        if (!relativePath) throw new Error('Expected a local documentation path');
+        expect(existsSync(resolve(dirname(pathname), relativePath)), href).toBe(true);
       }
     }
   });
@@ -80,8 +86,12 @@ describe('published documentation contract', () => {
     const packageRoot = resolve(root, 'packages/plugin');
     const markdown = readFileSync(resolve(packageRoot, 'README.md'), 'utf8');
     for (const link of markdown.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
-      if (/^[a-z]+:/i.test(link[1])) continue;
-      const pathname = resolve(packageRoot, link[1].split('#')[0]);
+      const href = link[1];
+      if (!href) throw new Error('Expected a package documentation link');
+      if (/^[a-z]+:/i.test(href)) continue;
+      const relativePath = href.split('#')[0];
+      if (!relativePath) throw new Error('Expected a local package documentation path');
+      const pathname = resolve(packageRoot, relativePath);
       expect(pathname.startsWith(`${packageRoot}/`)).toBe(true);
       expect(existsSync(pathname)).toBe(true);
     }
