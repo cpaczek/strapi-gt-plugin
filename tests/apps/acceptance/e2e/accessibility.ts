@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 
 export const assertAccessible = async (page: Page, include?: string): Promise<void> => {
+  if (include) await expect(page.locator(include)).toBeVisible();
   const builder = new AxeBuilder({ page });
   const { violations } = await (include ? builder.include(include) : builder).analyze();
   if (violations.length)
