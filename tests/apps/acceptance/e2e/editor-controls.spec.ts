@@ -522,7 +522,7 @@ test('a preexisting human target is protected before its first GT request', asyn
         await expect(cells.first()).toBeFocused();
         await page.keyboard.press('End');
         await expect(cells.last()).toBeFocused();
-        await expect(cells.last()).toBeInViewport({ ratio: 1 });
+        await expect(cells.last().getByText(/^General Translation:/)).toBeInViewport({ ratio: 1 });
         await page.keyboard.press('Home');
         await expect(cells.first()).toBeFocused();
         await page.setViewportSize({ width: 1280, height: 720 });
