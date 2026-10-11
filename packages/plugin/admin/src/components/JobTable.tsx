@@ -12,10 +12,28 @@ import {
   Typography,
 } from '@strapi/design-system';
 import { useIntl } from 'react-intl';
-import { useState } from 'react';
+import { useState, type FocusEvent } from 'react';
+import { styled } from 'styled-components';
 import { Toggle } from './Controls';
 import type { JobSummary } from '../../../shared/contracts';
 import { useText, type MessageKey } from '../i18n';
+
+const ProseCell = styled(Td)`
+  min-width: 20rem;
+  max-width: 32rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+
+  &:empty {
+    min-width: 0;
+  }
+`;
+
+const revealFocusedCell = (event: FocusEvent<HTMLTableElement>) => {
+  // Native grid focus can leave most of a wide cell outside its scrollport.
+  event.target.closest('td, th')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+};
 
 const RetryJob = ({
   job,
@@ -79,7 +97,7 @@ export const JobTable = ({
     );
   return (
     <Box overflow="auto">
-      <Table colCount={6} rowCount={jobs.length + 1}>
+      <Table colCount={6} rowCount={jobs.length + 1} onFocusCapture={revealFocusedCell}>
         <Thead>
           <Tr>
             {columns.map((label) => (
@@ -120,7 +138,7 @@ export const JobTable = ({
                   {text(`status.${job.status}`)}
                 </Typography>
               </Td>
-              <Td>
+              <ProseCell>
                 <Flex direction="column" alignItems="stretch" gap={2}>
                   <Typography>
                     {text('jobs.stage', { stage: text(`stage.${job.stage}`), count: job.attempts })}
@@ -134,8 +152,8 @@ export const JobTable = ({
                     {formatDate(job.updatedAt, { dateStyle: 'medium', timeStyle: 'short' })}
                   </Typography>
                 </Flex>
-              </Td>
-              <Td>
+              </ProseCell>
+              <ProseCell>
                 {onRetry && job.status === 'failed' && (
                   <RetryJob
                     key={`${job.id}:${job.updatedAt}`}
@@ -149,7 +167,7 @@ export const JobTable = ({
                     {localizeDiagnostic(messages.conflictRecovery(), text).text}
                   </Typography>
                 )}
-              </Td>
+              </ProseCell>
             </Tr>
           ))}
         </Tbody>
