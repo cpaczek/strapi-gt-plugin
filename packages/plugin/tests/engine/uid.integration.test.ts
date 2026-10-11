@@ -51,7 +51,7 @@ const provider = createServer(async (incoming, outgoing) => {
       idleDeadlineMs: provider.keepAliveTimeout + (provider.keepAliveTimeoutBuffer ?? 0),
     })
   );
-  outgoing.writeHead(200, { 'content-type': 'application/json' });
+  outgoing.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
   outgoing.end(JSON.stringify(reply));
 });
 provider.on('connection', (socket) => {
