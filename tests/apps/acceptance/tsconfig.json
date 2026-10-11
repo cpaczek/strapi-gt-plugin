@@ -1,7 +1,17 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true,
+    "allowImportingTsExtensions": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts", "*.ts", "integration/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.mjs",
+    "tests/**/*.ts",
+    "e2e/**/*.ts",
+    "*.ts",
+    "integration/**/*.ts"
+  ]
 }

@@ -3,8 +3,7 @@ import { createRequire } from 'node:module';
 import { realpath, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { runSafeCommand, sanitizeCommandOutput } from './safe-command.mjs';
 import { setTimeout as pollDelay } from 'node:timers/promises';
 
 const require = createRequire(import.meta.url);
@@ -143,10 +142,10 @@ const server = spawn('pnpm', ['start'], {
 });
 const output = { text: '' };
 server.stdout.on('data', (chunk) => {
-  output.text = `${output.text}${chunk}`.slice(-32000);
+  output.text = `${output.text}${chunk}`.slice(-2000000);
 });
 server.stderr.on('data', (chunk) => {
-  output.text = `${output.text}${chunk}`.slice(-32000);
+  output.text = `${output.text}${chunk}`.slice(-2000000);
 });
 try {
   const deadline = Date.now() + 30000;
@@ -160,7 +159,10 @@ try {
     if (readiness.ready) break;
     await pollDelay(100);
   }
-  assert.ok(readiness.ready, `Fresh Strapi start did not become healthy: ${output.text}`);
+  assert.ok(
+    readiness.ready,
+    `Fresh Strapi start did not become healthy: ${sanitizeCommandOutput(output.text)}`
+  );
   const response = await fetch(`http://127.0.0.1:${port}/api/articles?status=published&locale=en`);
   assert.equal(response.status, 200);
   const payload = await response.json();
@@ -174,7 +176,7 @@ try {
   assert.equal((await localizedResponse.json()).data.title, translated.title);
   const browserHelper = process.env.TESTBED_BROWSER_HELPER;
   assert.ok(browserHelper, 'Acceptance browser helper was not supplied');
-  const browserResult = await promisify(execFile)(
+  const browserResult = await runSafeCommand(
     process.execPath,
     [browserHelper, `http://127.0.0.1:${port}`],
     { cwd: process.cwd(), timeout: 60000, maxBuffer: 1000000 }
@@ -183,7 +185,7 @@ try {
   process.stderr.write(browserResult.stderr);
   const parityHelper = process.env.TESTBED_PARITY_HELPER;
   assert.ok(parityHelper, 'Acceptance parity helper was not supplied');
-  const parityResult = await promisify(execFile)(
+  const parityResult = await runSafeCommand(
     process.execPath,
     [parityHelper, `http://127.0.0.1:${port}`, accountFile],
     { cwd: process.cwd(), timeout: 1200000, maxBuffer: 8000000 }
@@ -194,6 +196,13 @@ try {
     'Consumer pnpm start served published source and translated content over HTTP.\n'
   );
 } finally {
+  await writeFile(
+    resolve('server-output.log'),
+    sanitizeCommandOutput(
+      `Packed Strapi pid=${server.pid}, exit=${server.exitCode}, signal=${server.signalCode}\n${output.text}`
+    ),
+    { mode: 0o600 }
+  );
   if (server.exitCode === null && server.pid) {
     process.kill(-server.pid, 'SIGTERM');
     await once(server, 'exit');
