@@ -431,6 +431,10 @@ const expectReadableHistory = async (row: Locator) => {
   expect(geometry.cellWidths).toHaveLength(2);
   for (const width of geometry.cellWidths) expect(width).toBeLessThanOrEqual(420);
   expect(geometry.contentWidth).toBeLessThanOrEqual(geometry.availableWidth + 1);
+  await base.info().attach('history-layout', {
+    contentType: 'application/json',
+    body: JSON.stringify(geometry),
+  });
 };
 
 test('a preexisting human target is protected before its first GT request', async ({
