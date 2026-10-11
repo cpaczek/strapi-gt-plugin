@@ -416,7 +416,7 @@ const selectTranslationFields = async (page: Page, paths: string[]) => {
   await saveSettings(page);
 };
 
-const expectReadableHistory = async (page: Page, row: Locator) => {
+const expectReadableHistory = async (row: Locator) => {
   const geometry = await row.evaluate((element) => {
     const table = element.closest('table');
     const scrollRegion = table?.parentElement;
@@ -470,7 +470,7 @@ test('a preexisting human target is protected before its first GT request', asyn
   await expect(
     currentRow().getByText(/Review this document in Content Manager and start a new translation/)
   ).toBeVisible();
-  await expectReadableHistory(page, currentRow());
+  await expectReadableHistory(currentRow());
   await assertAccessible(page);
   const changeLanguage = async (name: string) => {
     await page.goto(`${adminOrigin}/admin/me`);
@@ -506,21 +506,23 @@ test('a preexisting human target is protected before its first GT request', asyn
         0
       );
       await expect(currentRow().getByRole('button')).toHaveCount(0);
-      await expectReadableHistory(page, currentRow());
+      await expectReadableHistory(currentRow());
       if (language.code === 'ar') {
         await page.setViewportSize({ width: 768, height: 900 });
         const cells = currentRow().getByRole('gridcell');
-        await cells.first().focus();
+        await page.getByRole('main').focus();
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Tab');
+        await expect(page.getByRole('gridcell').first()).toBeFocused();
+        await page.keyboard.press('ArrowDown');
+        await expect(cells.first()).toBeFocused();
         await page.keyboard.press('End');
         await expect(cells.last()).toBeFocused();
-        const bounds = await cells.last().boundingBox();
-        expect(bounds).not.toBeNull();
-        expect(bounds?.x).toBeGreaterThanOrEqual(0);
-        expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(768);
+        await expect(cells.last()).toBeInViewport({ ratio: 1 });
         await page.keyboard.press('Home');
         await expect(cells.first()).toBeFocused();
         await page.setViewportSize({ width: 1280, height: 720 });
-        await expectReadableHistory(page, currentRow());
+        await expectReadableHistory(currentRow());
       }
       await assertAccessible(page);
       await page.screenshot({
