@@ -128,7 +128,9 @@ const send = (
   body: unknown,
   retryAfter?: string
 ): void => {
+  // Synchronous Strapi work can outlast idle timers in this same-process mock.
   response.writeHead(status, {
+    connection: 'close',
     'content-type': 'application/json',
     ...(retryAfter ? { 'retry-after': retryAfter } : {}),
   });
@@ -181,7 +183,7 @@ export const startMockGt = async (options: MockOptions): Promise<MockGtServer> =
         event: 'response-finish',
         at: new Date().toISOString(),
         connectionId: id,
-        idleDeadlineMs: server.keepAliveTimeout + server.keepAliveTimeoutBuffer,
+        idleDeadlineMs: server.keepAliveTimeout + (server.keepAliveTimeoutBuffer ?? 0),
       })
     );
     const chunks: Buffer[] = [];
