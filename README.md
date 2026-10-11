@@ -15,7 +15,6 @@ The Ender Post example reads published articles from Strapi:
 
 ![The Ender Post with its language links and first published fan story](docs/screenshots/ender-post.png)
 
-Both images were captured with Playwright from the running local applications.
 
 ## Compatibility
 
