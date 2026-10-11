@@ -40,7 +40,8 @@ export default {
       to: PLUGIN_ID,
       intlLabel: descriptor('name'),
       permissions: [{ action: PERMISSIONS.readSettings }],
-      Component: async () => ({ default: (await import('./pages/SettingsPage')).SettingsPage }),
+      Component: () =>
+        import('./pages/SettingsPage').then((mod) => ({ default: mod.SettingsPage })),
     });
     app.addMenuLink({
       to: `plugins/${PLUGIN_ID}`,
@@ -49,7 +50,7 @@ export default {
       permissions: [PERMISSIONS.readSettings, PERMISSIONS.translate, PERMISSIONS.bulkTranslate].map(
         (action) => ({ action })
       ),
-      Component: async () => ({ default: (await import('./pages/JobsPage')).JobsPage }),
+      Component: () => import('./pages/JobsPage').then((mod) => ({ default: mod.JobsPage })),
     });
   },
   bootstrap(app: StrapiApp) {
