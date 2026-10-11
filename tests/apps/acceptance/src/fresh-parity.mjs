@@ -11,6 +11,7 @@ import {
   runSafeCommand,
   sanitizeCommandOutput,
 } from '../../../../scripts/testbed/safe-command.mjs';
+import { stopOwnedProcessGroup } from '../../../../scripts/testbed/owned-process.mjs';
 import { declaredBinary } from '../../../../scripts/testbed/package-bin.mjs';
 
 const root = resolve(import.meta.dirname, '../../../..');
@@ -140,8 +141,5 @@ try {
     'Packed production app passed the shared editor and reader acceptance suites.\n'
   );
 } finally {
-  if (reader.exitCode === null && reader.pid) {
-    process.kill(-reader.pid, 'SIGTERM');
-    await once(reader, 'exit');
-  }
+  await stopOwnedProcessGroup(reader);
 }

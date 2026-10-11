@@ -4,7 +4,6 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { z } from 'zod';
 import { startMockGt } from './mock-gt';
-
 import { runSafeCommand } from '../../../../scripts/testbed/safe-command.mjs';
 const root = resolve(import.meta.dirname, '../../../..');
 const packageSchema = z.object({ name: z.string(), version: z.string() }).passthrough();
@@ -110,10 +109,8 @@ await writeFile(
   { mode: 0o600 }
 );
 await cp(resolve(root, 'scripts/testbed/fresh-smoke.mjs'), resolve(appDirectory, 'smoke.mjs'));
-await cp(
-  resolve(root, 'scripts/testbed/safe-command.mjs'),
-  resolve(appDirectory, 'safe-command.mjs')
-);
+for (const helper of ['safe-command.mjs', 'owned-process.mjs'])
+  await cp(resolve(root, 'scripts/testbed', helper), resolve(appDirectory, helper));
 await cp(
   resolve(directory, tarball),
   resolve(appDirectory, 'strapi-plugin-general-translation.tgz')

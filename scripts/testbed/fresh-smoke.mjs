@@ -4,6 +4,7 @@ import { realpath, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { runSafeCommand, sanitizeCommandOutput } from './safe-command.mjs';
+import { stopOwnedProcessGroup } from './owned-process.mjs';
 import { setTimeout as pollDelay } from 'node:timers/promises';
 
 const require = createRequire(import.meta.url);
@@ -197,10 +198,7 @@ try {
   );
 } finally {
   const lifecycle = `Packed Strapi pid=${server.pid}, exit=${server.exitCode}, signal=${server.signalCode}`;
-  if (server.exitCode === null && server.pid) {
-    process.kill(-server.pid, 'SIGTERM');
-    await once(server, 'exit');
-  }
+  await stopOwnedProcessGroup(server);
   await writeFile(
     resolve('server-output.log'),
     sanitizeCommandOutput(`${lifecycle}\n${output.text}`),
