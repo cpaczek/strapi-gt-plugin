@@ -56,3 +56,89 @@ test('a persistently hidden scope fails instead of passing an empty audit', asyn
   await loadPage(page, controls.replace('<section ', '<section hidden '));
   await expect(assertAccessible(page, selector)).rejects.toThrow();
 });
+
+test('a nested scope is audited after its surrounding editor is present', async ({ page }) => {
+  await loadPage(page, `<article aria-label="Editor"><div>${controls}</div></article>`);
+  await assertAccessible(page, selector);
+});
+
+test('a translated Arabic scope with quoted punctuation is audited', async ({ page }) => {
+  const label = 'عناصر "General Translation"';
+  await loadPage(page, controls);
+  await page
+    .locator('section')
+    .evaluate((section, name) => section.setAttribute('aria-label', name), label);
+  await assertAccessible(page, `section[aria-label=${JSON.stringify(label)}]`);
+});
+
+test('a visible dialog scope retains the full audit', async ({ page }) => {
+  await loadPage(
+    page,
+    '<div role="dialog" aria-label="Translate content" aria-modal="true"><button>Translate</button></div>'
+  );
+  await assertAccessible(page, '[role="dialog"]');
+});
+
+test('an offscreen rendered scope does not require viewport scrolling', async ({ page }) => {
+  await loadPage(page, controls.replace('<section ', '<section style="margin-top:150vh" '));
+  await expect(page.locator(selector)).not.toBeInViewport();
+  await assertAccessible(page, selector);
+});
+
+test('large text content inside the scope is fully audited', async ({ page }) => {
+  await loadPage(
+    page,
+    controls.replace('<button>', `<p>${'Long translated article. '.repeat(1000)}</p><button>`)
+  );
+  await assertAccessible(page, selector);
+});
+
+test('a hidden unrelated panel does not prevent auditing the requested visible panel', async ({
+  page,
+}) => {
+  await loadPage(
+    page,
+    `${controls}<section hidden aria-label="Other controls"><button></button></section>`
+  );
+  await assertAccessible(page, selector);
+});
+
+test('a scoped audit retains its boundary when unrelated content has a violation', async ({
+  page,
+}) => {
+  await loadPage(page, `${controls}<button></button>`);
+  await assertAccessible(page, selector);
+});
+
+test('a real violation inside the visible scope still fails', async ({ page }) => {
+  await loadPage(page, controls.replace('<button>Translate</button>', '<button></button>'));
+  await expect(assertAccessible(page, selector)).rejects.toThrow(/button-name/);
+});
+
+test('a whole-page audit still catches violations outside a plugin region', async ({ page }) => {
+  await loadPage(page, `${controls}<button></button>`);
+  await expect(assertAccessible(page)).rejects.toThrow(/button-name/);
+});
+
+test('independent pages can audit their requested scopes concurrently', async ({
+  page,
+  context,
+}) => {
+  const other = await context.newPage();
+  try {
+    await Promise.all([loadPage(page, controls), loadPage(other, controls)]);
+    await Promise.all([assertAccessible(page, selector), assertAccessible(other, selector)]);
+  } finally {
+    await other.close();
+  }
+});
+
+test('an ambiguous scope fails instead of silently choosing one panel', async ({ page }) => {
+  await loadPage(page, `${controls}${controls}`);
+  await expect(assertAccessible(page, selector)).rejects.toThrow(/strict mode violation/);
+});
+
+test('a whole-page audit with no include remains supported', async ({ page }) => {
+  await loadPage(page, controls);
+  await assertAccessible(page);
+});
