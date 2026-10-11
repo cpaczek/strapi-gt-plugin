@@ -196,15 +196,14 @@ try {
     'Consumer pnpm start served published source and translated content over HTTP.\n'
   );
 } finally {
-  await writeFile(
-    resolve('server-output.log'),
-    sanitizeCommandOutput(
-      `Packed Strapi pid=${server.pid}, exit=${server.exitCode}, signal=${server.signalCode}\n${output.text}`
-    ),
-    { mode: 0o600 }
-  );
+  const lifecycle = `Packed Strapi pid=${server.pid}, exit=${server.exitCode}, signal=${server.signalCode}`;
   if (server.exitCode === null && server.pid) {
     process.kill(-server.pid, 'SIGTERM');
     await once(server, 'exit');
   }
+  await writeFile(
+    resolve('server-output.log'),
+    sanitizeCommandOutput(`${lifecycle}\n${output.text}`),
+    { mode: 0o600 }
+  );
 }

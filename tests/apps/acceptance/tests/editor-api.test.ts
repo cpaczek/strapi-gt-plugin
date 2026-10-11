@@ -1,5 +1,4 @@
 import { once } from 'node:events';
-import { setTimeout as reachDeadline } from 'node:timers/promises';
 import { Worker } from 'node:worker_threads';
 import { request, type APIRequestContext } from '@playwright/test';
 import { describe, expect, it } from 'vitest';
@@ -52,13 +51,16 @@ const crossIdleDeadline = async (
 ): ReturnType<APIRequestContext['get']> => {
   expect((await api.get('/warm')).status()).toBe(200);
   expect((await api.get('/warm-again')).status()).toBe(200);
-  await expect.poll(() => events.filter((event) => event.event === 'finish').length).toBe(2);
+  while (events.filter((event) => event.event === 'finish').length < 2)
+    await once(worker, 'message');
   const completed = events.filter((event) => event.event === 'finish').at(-1)?.time;
   if (completed === undefined)
     throw new Error('The API server did not report its response deadline');
+  const blocking = once(worker, 'message');
   worker.postMessage({ event: 'block', until: completed + idleDeadlineMs + 150 });
-  // Issue just before the server's idle deadline, then let its blocked loop cross that deadline.
-  await reachDeadline(Math.max(0, completed + idleDeadlineMs - 50 - performance.now()));
+  const [barrier] = await blocking;
+  expect(eventSchema.parse(barrier).event).toBe('blocking');
+  // Queue the request during the observed block; the server processes it after its idle deadline.
   return api.get('/after-idle');
 };
 
