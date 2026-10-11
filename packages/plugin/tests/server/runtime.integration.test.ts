@@ -1,10 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { startStrapiFixture } from './strapi-fixture';
 import { REQUEST_TIMEOUT_MS } from '../../shared/constants';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
-import { summarizeJob } from '../../server/src/repository';
-import { formatUnknownError } from '../../shared/messages';
 
 vi.setConfig({ testTimeout: REQUEST_TIMEOUT_MS * 2, hookTimeout: REQUEST_TIMEOUT_MS * 4 });
 
@@ -105,14 +101,12 @@ const queue = async (documentId: string, force = false, actorId = app().actorId)
   if (!id) throw new Error('No job was enqueued');
   return id;
 };
-const finish = async (id: number, stages?: { stage: string; elapsedMs: number }[]) => {
+const finish = async (id: number) => {
   const { runtime } = app();
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const job = await runtime.repository.get(id);
     if (job && ['failed', 'conflict', 'succeeded'].includes(job.status)) return job;
-    const started = performance.now();
     await runtime.worker.execute();
-    if (job) stages?.push({ stage: job.stage, elapsedMs: performance.now() - started });
   }
   throw new Error('The worker did not reach a terminal stage');
 };
@@ -202,54 +196,7 @@ describe('real runtime conflict and permission controls', () => {
         locale: 'fr',
         data: { title: 'Human title', createdBy: app().actorId, updatedBy: app().actorId },
       });
-    const requestStart = app().mock.requests.length;
-    const stages: { stage: string; elapsedMs: number }[] = [];
-    const transport: { status?: number; error?: string; cause?: string; elapsedMs: number }[] = [];
-    const realFetch = globalThis.fetch;
-    const capture = vi.spyOn(globalThis, 'fetch').mockImplementation(async (...parameters) => {
-      const started = performance.now();
-      try {
-        const response = await realFetch(...parameters);
-        transport.push({ status: response.status, elapsedMs: performance.now() - started });
-        return response;
-      } catch (failure) {
-        transport.push({
-          error: formatUnknownError(failure),
-          cause:
-            failure instanceof Error && failure.cause instanceof Error
-              ? formatUnknownError(failure.cause)
-              : undefined,
-          elapsedMs: performance.now() - started,
-        });
-        throw failure;
-      }
-    });
-    const job = await queue(source.documentId)
-      .then((id) => finish(id, stages))
-      .finally(() => capture.mockRestore());
-    const evidenceDirectory = resolve(import.meta.dirname, '../../../../.work/server-stability');
-    await mkdir(evidenceDirectory, { recursive: true });
-    await writeFile(
-      resolve(evidenceDirectory, `human-edit-${Date.now()}-${process.pid}.json`),
-      JSON.stringify(
-        {
-          job: summarizeJob(job),
-          stages,
-          transport,
-          requests: app()
-            .mock.requests.slice(requestStart)
-            .map(({ method, path, projectId, apiVersion }) => ({
-              method,
-              path,
-              projectId,
-              apiVersion,
-            })),
-        },
-        null,
-        2
-      ),
-      { mode: 0o600 }
-    );
+    const job = await finish(await queue(source.documentId));
     expect(job.status, JSON.stringify(job.error)).toBe('succeeded');
     expect(await target(source.documentId)).toMatchObject({
       title: 'Human title',
@@ -1000,41 +947,9 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
   const start = mock.requests.length;
   const persist = runtime.repository.saveProgress;
   let checkpoints = 0;
-  const checkpointEvents: { saved: boolean; completed: number }[] = [];
-  const transport: {
-    status?: number;
-    error?: string;
-    cause?: string;
-    code?: string;
-    elapsedMs: number;
-  }[] = [];
-  const realFetch = globalThis.fetch;
-  const captureFetch = () =>
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (...parameters) => {
-      const started = performance.now();
-      try {
-        const response = await realFetch(...parameters);
-        transport.push({ status: response.status, elapsedMs: performance.now() - started });
-        return response;
-      } catch (failure) {
-        const cause = failure instanceof Error ? failure.cause : undefined;
-        transport.push({
-          error: formatUnknownError(failure),
-          cause: cause instanceof Error ? formatUnknownError(cause) : undefined,
-          code:
-            cause instanceof Error && 'code' in cause && typeof cause.code === 'string'
-              ? formatUnknownError(cause.code)
-              : undefined,
-          elapsedMs: performance.now() - started,
-        });
-        throw failure;
-      }
-    });
-  const capture = captureFetch();
   runtime.repository.saveProgress = async (job, completed) => {
     const saved = await persist(job, completed);
     checkpoints += 1;
-    checkpointEvents.push({ saved, completed: Object.keys(completed).length });
     if (checkpoints === 1) mock.failNext({ status: 429 });
     return saved;
   };
@@ -1042,39 +957,8 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
     await runtime.worker.execute();
   } finally {
     runtime.repository.saveProgress = persist;
-    capture.mockRestore();
   }
   const waiting = await runtime.repository.get(id);
-  const saveEvidence = async (
-    phase: string,
-    snapshot: Awaited<ReturnType<typeof runtime.repository.get>>,
-    successfulOccurrences: number[] = []
-  ) => {
-    const evidenceDirectory = resolve(import.meta.dirname, '../../../../.work/server-stability');
-    await mkdir(evidenceDirectory, { recursive: true });
-    await writeFile(
-      resolve(evidenceDirectory, `paid-chunks-${phase}-${Date.now()}-${process.pid}.json`),
-      JSON.stringify(
-        {
-          job: snapshot ? summarizeJob(snapshot) : null,
-          checkpointEvents,
-          storedChunkCount: Object.keys(snapshot?.runtimeProgress ?? {}).length,
-          successfulOccurrences,
-          transport,
-          requests: mock.requests.slice(start).map(({ method, path, projectId, apiVersion }) => ({
-            method,
-            path,
-            projectId,
-            apiVersion,
-          })),
-        },
-        null,
-        2
-      ),
-      { mode: 0o600 }
-    );
-  };
-  await saveEvidence('first-attempt', waiting);
   expect(waiting?.status, JSON.stringify(waiting?.error)).toBe('waiting');
   expect(Object.keys(waiting?.runtimeProgress ?? {}).length).toBeGreaterThan(0);
   expect(await target(source.documentId)).toBeNull();
@@ -1085,14 +969,10 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
   );
   await makeDue(id);
   const resumed = createPluginRuntime(strapi);
-  const resumedCapture = captureFetch();
-  try {
-    await resumed.worker.execute();
-    await resumed.worker.execute();
-  } finally {
-    resumedCapture.mockRestore();
-  }
+  await resumed.worker.execute();
+  await resumed.worker.execute();
   const completed = await resumed.repository.get(id);
+  expect(completed?.status, JSON.stringify(completed?.error)).toBe('succeeded');
   const requestedIds = mock.requests
     .slice(start)
     .filter((request) => request.path === '/v2/translate')
@@ -1101,12 +981,6 @@ it('persists successful paid chunks and resumes only unfinished work after a rej
         z.object({ requests: z.record(z.string(), z.unknown()) }).parse(request.body).requests
       )
     );
-  await saveEvidence(
-    'resumed-attempt',
-    completed,
-    successfulIds.map((succeeded) => requestedIds.filter((id) => id === succeeded).length)
-  );
-  expect(completed?.status, JSON.stringify(completed?.error)).toBe('succeeded');
   for (const succeeded of successfulIds)
     expect(requestedIds.filter((id) => id === succeeded)).toHaveLength(1);
 });

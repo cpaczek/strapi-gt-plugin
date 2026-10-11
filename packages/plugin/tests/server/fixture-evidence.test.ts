@@ -102,3 +102,15 @@ describe('shared fixture evidence', () => {
     await evidence.close();
   });
 });
+
+it('does not replace native fetch validation failures while inspecting a request URL', async () => {
+  const failure = new TypeError('Native request validation failed');
+  const fetch = vi.fn(async () => {
+    throw failure;
+  });
+  vi.stubGlobal('fetch', fetch);
+  const evidence = await setup();
+  await expect(globalThis.fetch('not an absolute URL')).rejects.toBe(failure);
+  expect(fetch).toHaveBeenCalledWith('not an absolute URL');
+  await evidence.close();
+});

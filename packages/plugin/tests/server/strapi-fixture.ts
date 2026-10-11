@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, symlink, writeFile, rm } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { z } from 'zod';
 import type { Core } from '@strapi/strapi';
@@ -8,6 +8,8 @@ import plugin from '../../server/src';
 import { DEFAULT_SETTINGS } from '../../shared/constants';
 import type { PluginSettings } from '../../shared/contracts';
 import { startMockGt } from '../../../../tests/apps/acceptance/src/mock-gt';
+import { createFixtureEvidence } from './fixture-evidence';
+import type { PluginRuntime } from '../../server/src/runtime';
 
 const root = resolve(import.meta.dirname, '../../../..');
 const framework: unknown = createRequire(resolve(root, 'playground/package.json'))(
@@ -25,6 +27,8 @@ const createStrapi = framework.createStrapi;
 const record = z.object({ id: z.number() }).passthrough();
 const sourceRecord = record.extend({ documentId: z.string(), locale: z.string() });
 const fixtureSymbol = Symbol.for('general-translation.real-server-test');
+const isProcessListener = (value: unknown): value is (...arguments_: unknown[]) => void =>
+  typeof value === 'function';
 
 export const startStrapiFixture = async (
   options: { uid?: boolean; gtBaseUrl?: string; locales?: string[] } = {}
@@ -38,6 +42,10 @@ export const startStrapiFixture = async (
   };
   const key = randomBytes(32).toString('hex');
   const mock = await startMockGt({ apiKey: key });
+  const evidence = await createFixtureEvidence(
+    resolve(root, '.work/server-stability', `fixture-${basename(directory)}-${process.pid}.jsonl`),
+    [mock.url, ...(options.gtBaseUrl ? [new URL(options.gtBaseUrl).origin] : [])]
+  );
   const previousKey = process.env.GT_API_KEY;
   process.env.GT_API_KEY = key;
   const previousTelemetry = process.env.STRAPI_TELEMETRY_DISABLED;
@@ -152,11 +160,26 @@ export const startStrapiFixture = async (
   await write('src/index.js', 'module.exports = {};');
   await mkdir(resolve(directory, 'public/uploads'), { recursive: true });
   let strapi: Core.Strapi | undefined;
+  let runtime: PluginRuntime | undefined;
   const listeners = process
     .eventNames()
     .map((event) => ({ event, handlers: process.rawListeners(event) }));
   const close = async () => {
     const failures: unknown[] = [];
+    try {
+      if (strapi && runtime) {
+        const rows: unknown = await strapi.db
+          .query('plugin::general-translation.job')
+          .findMany({ select: ['id'], orderBy: { id: 'asc' } });
+        for (const row of z.array(record).parse(rows)) {
+          const job = await runtime.repository.get(row.id);
+          if (job) evidence.job('final-job', job);
+        }
+      }
+      await evidence.flush();
+    } catch (failure) {
+      failures.push(failure);
+    }
     try {
       if (strapi) await strapi.destroy();
     } catch (failure) {
@@ -164,9 +187,15 @@ export const startStrapiFixture = async (
     }
     for (const { event, handlers } of listeners)
       for (const handler of handlers)
-        if (!process.rawListeners(event).includes(handler)) process.on(event, handler);
+        if (isProcessListener(handler) && !process.rawListeners(event).includes(handler))
+          process.on(event, handler);
     try {
       await mock.close();
+    } catch (failure) {
+      failures.push(failure);
+    }
+    try {
+      await evidence.close();
     } catch (failure) {
       failures.push(failure);
     }
@@ -186,7 +215,7 @@ export const startStrapiFixture = async (
   try {
     strapi = createStrapi({ appDir: directory, distDir: directory });
     await strapi.load();
-    const runtime = plugin.services.translation({ strapi });
+    runtime = plugin.services.translation({ strapi });
     await runtime.worker.stop();
     for (const code of options.locales ?? ['fr', 'ar'])
       await strapi.db.query('plugin::i18n.locale').create({ data: { code, name: code } });
@@ -250,7 +279,17 @@ export const startStrapiFixture = async (
       },
     };
     await runtime.saveSettings(settings);
-    return { strapi, runtime, actorId: actor.id, source, assetId: asset.id, settings, mock, close };
+    return {
+      strapi,
+      runtime,
+      evidencePath: evidence.path,
+      actorId: actor.id,
+      source,
+      assetId: asset.id,
+      settings,
+      mock,
+      close,
+    };
   } catch (failure) {
     try {
       await close();
